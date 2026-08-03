@@ -21,7 +21,7 @@ Quản lý chứng từ tài chính và nghĩa vụ thuế đối với từng B
 ![Grug Retail VAT Invoice](/images/grug_retail_vat_invoice.jpeg)
 
 - **Retail Invoice Generation**: Ngay khi Booking chuyển trạng thái `PAID`, sinh mã `invoice_no` nội bộ và file PDF Hóa đơn bán lẻ.
-- **VAT Integration Queue**: Đẩy message `ExportVATInvoiceJob` vào RabbitMQ / Redis Queue để bên thứ ba phát hành hóa đơn VAT điện tử.
+- **VAT Integration Queue**: Đẩy message `ExportVATInvoiceJob` vào Laravel Database Queue (`queue:work`) để bên thứ ba phát hành hóa đơn VAT điện tử.
 
 ---
 

@@ -56,7 +56,7 @@ sequenceDiagram
     participant Ctrl as BookingAPIController
     participant Act as CreateBookingAction
     participant T1 as ValidateSeatHoldTask
-    participant T2 as LockSeatRedisTask
+    participant T2 as LockSeatDatabaseTask
     participant T3 as CreateBookingRecordTask
     participant Event as BookingCreatedEvent
 
@@ -64,7 +64,7 @@ sequenceDiagram
     Ctrl->>Act: run(CreateBookingDTO)
     Act->>T1: run(seat_ids, trip_id)
     T1-->>Act: Seat Available
-    Act->>T2: run(seat_ids) [Redis Lock]
+    Act->>T2: run(seat_ids) [MySQL lockForUpdate]
     T2-->>Act: Lock Acquired
     Act->>T3: run(DTO)
     T3-->>Act: Booking Entity
