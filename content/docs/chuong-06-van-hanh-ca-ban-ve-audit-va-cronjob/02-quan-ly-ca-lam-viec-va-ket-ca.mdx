@@ -1,0 +1,65 @@
+---
+title: "02. Quản Lý Ca Làm Việc & Kết Ca (Shift Management & Cash Reconciliation)"
+description: "Workflow quản lý ca làm việc của Nhân viên phòng vé và quy trình đối soát tiền mặt kết ca"
+---
+
+# Quản Lý Ca Làm Việc & Kết Ca (Shift Management & Cash Reconciliation)
+
+Kiểm soát dòng tiền mặt thu được tại các quầy bán vé bến tàu Superdong.
+
+---
+
+## 🎯 Bài Toán Nghiệp Vụ
+
+Nhân viên bán vé làm việc theo ca (Sáng / Chiều). Cuối ca, nhân viên phải thực hiện **Kết ca (End of Shift)**, đếm tổng số tiền mặt thực tế thu được trong hộc tiền và đối soát với tổng số tiền thu từ các Booking đã bán trong hệ thống.
+
+---
+
+## 💡 Giải Pháp Kiến Trúc Backend
+
+![Grug Shift End Cash](/images/grug_shift_end_cash.jpeg)
+
+```mermaid
+flowchart TD
+    StartShift["Nhân viên mở Ca (Start Shift)<br/>Khai báo tiền quỹ ban đầu"] --> SellTickets["Bán vé & thu tiền mặt tại quầy"]
+    SellTickets --> EndShift["Bấm Kết Ca (End Shift)"]
+    EndShift --> CountCash["Nhập số tiền mặt thực tế đếm được"]
+    CountCash --> Reconcile{"So sánh với System Expected Amount"}
+    
+    Reconcile -->|Khớp 100%| Closed["Đóng ca trạng thái CLOSED"]
+    Reconcile -->|Lệch tiền| FlagDiscrepancy["Đóng ca trạng thái DISCREPANCY<br/>Báo động Quản lý đối soát"]
+```
+
+---
+
+## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO
+
+```mermaid
+erDiagram
+    USERS ||--|{ COUNTER_SHIFTS : operates
+    COUNTER_SHIFTS ||--|{ BOOKINGS : processed_in
+
+    COUNTER_SHIFTS {
+        bigint id PK
+        bigint staff_id FK
+        bigint station_id FK
+        timestamp started_at
+        timestamp ended_at
+        decimal initial_cash
+        decimal system_total_cash
+        decimal actual_counted_cash
+        decimal discrepancy_amount
+        string status "OPEN | CLOSED | DISCREPANCY"
+    }
+```
+
+### 🔍 Lý Giải TẠI SAO (Schema Rationale):
+- **Vì sao mọi `BOOKING` bán tại quầy phải lưu `shift_id` (FK)?**: Để khi phát hiện lệch tiền ở ca làm việc 14h-18h, Quản lý có thể lọc ngay lập tức toàn bộ các Booking phát sinh trong đúng `shift_id` đó để tìm ra hóa đơn bị nhầm lẫn.
+
+---
+
+## 🗿 Grug Đúc Kết
+
+<Callout type="tip">
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Hết ca đếm sò tiền mặt trong rương! Số sò cầm trên tay phải khớp 100% với chữ đục trên máy thì tù trưởng mới cho về chòi ngủ!"*
+</Callout>

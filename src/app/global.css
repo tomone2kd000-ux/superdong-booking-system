@@ -1,0 +1,58 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+:root {
+  --kindle-bg: #faf7f0;
+  --kindle-text: #2b251e;
+  --kindle-font-size: 1rem;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+/* Kindle Reader Mode Settings for Light Mode Only */
+html:not(.dark) {
+  background-color: var(--kindle-bg) !important;
+  color: var(--kindle-text) !important;
+}
+
+html:not(.dark) body {
+  background-color: var(--kindle-bg) !important;
+  color: var(--kindle-text) !important;
+}
+
+html:not(.dark) [data-theme="light"],
+html:not(.dark) main,
+html:not(.dark) article,
+html:not(.dark) aside,
+html:not(.dark) nav {
+  background-color: var(--kindle-bg) !important;
+}
+
+/* Font Family Selection */
+html.use-kindle-serif article,
+html.use-kindle-serif .prose,
+html.use-kindle-serif p,
+html.use-kindle-serif li {
+  font-family: var(--font-serif), Georgia, Cambria, serif !important;
+}
+
+html.use-kindle-sans article,
+html.use-kindle-sans .prose,
+html.use-kindle-sans p,
+html.use-kindle-sans li {
+  font-family: var(--font-sans), Inter, system-ui, sans-serif !important;
+}
+
+article .prose,
+article p,
+article li {
+  font-size: var(--kindle-font-size);
+}

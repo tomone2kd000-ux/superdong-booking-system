@@ -1,0 +1,130 @@
+---
+title: "04. Phụ Lục: Sơ Đồ Mermaid & Diagram"
+description: "Tổng hợp các Sơ đồ Business Flow, ERD, State Machine và Sequence Diagram của hệ thống"
+---
+
+# Phụ Lục Sơ Đồ Kiến Trúc
+
+Đây là phụ lục tổng hợp các bản vẽ (Diagram) trực quan hóa luồng nghiệp vụ phức tạp của hệ thống Superdong Booking.
+
+## I. Sơ Đồ Chuyển Trạng Thái (State Machine)
+
+### 1. Booking State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> DRAFT: Tạo đơn
+    DRAFT --> PENDING: Lock ghế thành công
+    PENDING --> EXPIRED: Quá 15p (Cronjob)
+    PENDING --> CANCELLED: Khách tự hủy
+    PENDING --> PAID: Thanh toán thành công (Webhook)
+    
+    PAID --> COMPLETED: Tàu xuất bến an toàn
+    PAID --> REFUNDED: Admin hủy/Hoàn tiền
+    
+    EXPIRED --> [*]
+    CANCELLED --> [*]
+    COMPLETED --> [*]
+    REFUNDED --> [*]
+```
+
+### 2. Ticket State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> ISSUED: Booking = PAID
+    ISSUED --> CHECKED_IN: Quét QR tại bến
+    CHECKED_IN --> BOARDED: Đã lên tàu
+    ISSUED --> EXCHANGED: Khách đổi vé khác
+    ISSUED --> VOID: Hủy/Hoàn tiền
+```
+
+## II. Sơ Đồ Tuần Tự (Sequence Diagram)
+
+### Luồng Đặt Vé và Thanh Toán Cơ Bản (Happy Path)
+
+```mermaid
+sequenceDiagram
+    actor C as Customer
+    participant API as Booking API
+    participant DB as PostgreSQL
+    participant R as Redis (Lock)
+    participant PG as Payment Gateway
+
+    C->>API: 1. Chọn Trip, Số lượng (POST /bookings)
+    API->>R: 2. Acquire Redis Distributed Lock (TripID)
+    API->>DB: 3. BEGIN Transaction
+    API->>DB: 4. SELECT FOR UPDATE trip_seat_inventories
+    DB-->>API: Trả về số ghế trống
+    
+    alt Đủ ghế
+        API->>DB: 5. UPDATE held_seats += qty
+        API->>DB: 6. INSERT bookings (Status: PENDING)
+        API->>DB: 7. COMMIT Transaction
+        API->>R: 8. Release Redis Lock
+        API-->>C: Trả về Booking ID
+        
+        C->>API: 9. Yêu cầu Link Thanh toán
+        API->>PG: 10. Tạo Request Thanh Toán
+        PG-->>API: Payment URL
+        API-->>C: Trả URL cho KH
+        
+        C->>PG: 11. Nhập thẻ & Thanh toán
+        PG-->>API: 12. Webhook (Async) - Thanh toán OK
+        API->>DB: 13. Cập nhật Booking (PAID), Ticket (ISSUED)
+        API->>DB: 14. UPDATE held_seats -= qty, sold_seats += qty
+    else Không đủ ghế
+        API->>DB: ROLLBACK
+        API->>R: Release Redis Lock
+        API-->>C: Báo lỗi "Hết vé"
+    end
+```
+
+## III. Sơ Đồ ERD Rút Gọn (Core Diagram)
+
+```mermaid
+erDiagram
+    TRIP {
+        int id PK
+        string route_id
+        datetime depart_time
+        string status
+    }
+    TRIP_SEAT_INVENTORY {
+        int id PK
+        int trip_id FK
+        string seat_class
+        int total_seats
+        int held_seats
+        int sold_seats
+    }
+    BOOKING {
+        int id PK
+        int trip_id FK
+        int user_id FK
+        string status
+        decimal grand_total
+    }
+    TICKET {
+        int id PK
+        int booking_id FK
+        int passenger_id FK
+        string qr_code
+        string status
+    }
+    PASSENGER {
+        int id PK
+        string full_name
+        string identity_no
+    }
+
+    TRIP ||--|{ TRIP_SEAT_INVENTORY : "có"
+    TRIP ||--|{ BOOKING : "chứa"
+    BOOKING ||--|{ TICKET : "bao gồm"
+    TICKET }|--|| PASSENGER : "định danh cho"
+```
+
+<Callout type="info">
+  **Bản đồ liên kết ngữ cảnh (Context Map)**
+  Các sơ đồ trên thể hiện sự giao tiếp chéo giữa các Domain. Đặc biệt là luồng Sequence, nó minh họa rõ cơ chế Database Lock nhằm giải quyết Race Condition một cách triệt để.
+</Callout>

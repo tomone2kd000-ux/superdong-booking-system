@@ -1,0 +1,9 @@
+{
+  "title": "Chương 04: Cổng Thanh Toán, Vé Điện Tử & Soát Vé QR",
+  "pages": [
+    "01-payment-gateway-webhook-va-giao-dich-qua-han",
+    "02-thanh-toan-tai-quay-va-phat-hanh-ve",
+    "03-ma-qr-checkin-va-quy-tac-no-offline",
+    "04-xuat-hoa-don-ban-le-va-data-vat"
+  ]
+}

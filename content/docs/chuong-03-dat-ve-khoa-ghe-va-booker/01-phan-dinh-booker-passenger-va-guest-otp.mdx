@@ -1,0 +1,85 @@
+---
+title: "01. Phân Định Booker, Passenger & OTP Khách Vãng Lai"
+description: "Phân biệt Người đặt vé (Booker) vs Hành khách (Passenger) và cơ chế xác minh OTP Khách vãng lai (DEC-026, DEC-027, DEC-035, DEC-040)"
+---
+
+# Phân Định Booker, Passenger & OTP Khách Vãng Lai
+
+Hệ thống Superdong phân định rạch ròi giữa người thực hiện giao dịch thanh toán và người thực tế ngồi trên tàu.
+
+---
+
+## 🎯 Bài Toán Nghiệp Vụ
+
+1. **Booker vs Passenger (DEC-040)**: Anh Hùng mua vé cho gia đình 4 người. Anh Hùng là `BOOKER` (quản lý đơn, có quyền đổi/hủy). 3 người còn lại là `PASSENGER` (chỉ được xem vé của chính mình để lên tàu).
+2. **Khách Vãng Lai Không Đăng Nhập (DEC-026, DEC-027)**: Đặt vé cực kỳ thuận tiện, không bắt tạo tài khoản. Hệ thống gửi link tra cứu bảo mật qua Email/SMS.
+3. **Bảo Mật OTP Thao Tác Nhạy Cảm (DEC-035)**: Khách vãng lai muốn đổi ngày đi, sửa SĐT hoặc hủy vé -> **Bắt buộc phải nhập OTP xác minh** gửi về SĐT/Email lúc đặt.
+
+---
+
+## 💡 Giải Pháp Kiến Trúc Backend
+
+![Grug Booker Passenger OTP](/images/grug_booker_passenger_otp.jpeg)
+
+- **Guest Security Hash**: Đơn vãng lai lưu token `lookup_hash = SHA256(booking_code + secret_key)`.
+- **OTP Verification Flow**:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Guest as Khách Vãng Lai
+    participant API as BookingAPI
+    participant OTP as OTPService
+    participant SMS as SMS/Email Gateway
+
+    Guest->>API: POST /api/v1/bookings/request-otp (booking_code)
+    API->>OTP: Generate 6-digit OTP
+    OTP->>SMS: Send OTP to Booker Phone/Email
+    Guest->>API: POST /api/v1/bookings/cancel (booking_code, otp_token)
+    API->>OTP: Verify OTP
+    OTP-->>API: OTP Valid
+    API-->>Guest: Execute Cancellation Success
+```
+
+---
+
+## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO
+
+```mermaid
+erDiagram
+    BOOKERS ||--|| BOOKINGS : places
+    BOOKINGS ||--|{ PASSENGERS : lists
+
+    BOOKERS {
+        bigint id PK
+        string full_name "Nguyễn Văn Hùng"
+        string email "hung@gmail.com"
+        string phone "0901234567"
+        boolean is_guest true
+    }
+
+    BOOKINGS {
+        bigint id PK
+        string booking_code UK
+        bigint booker_id FK
+        string lookup_hash
+    }
+
+    PASSENGERS {
+        bigint id PK
+        bigint booking_leg_id FK
+        string full_name "Nguyễn Văn A"
+        string id_number "036099..."
+    }
+```
+
+### 🔍 Lý Giải TẠI SAO (Schema Rationale):
+- **Vì sao tách `BOOKERS` riêng khỏi `PASSENGERS`?**: Booker có thể không đi cùng tàu (ví dụ: Công ty đặt vé cho nhân viên đi công tác). Tách `BOOKERS` giúp quản lý thông tin xuất hóa đơn và liên hệ hoàn toàn độc lập với danh sách đi tàu.
+
+---
+
+## 🗿 Grug Đúc Kết
+
+<Callout type="tip">
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Người trả tiền sò (Booker) nắm chìa khóa đơn! Muốn sửa thông tin hay trả vé thì chim bồ câu OTP phải gật đầu mới được làm!"*
+</Callout>

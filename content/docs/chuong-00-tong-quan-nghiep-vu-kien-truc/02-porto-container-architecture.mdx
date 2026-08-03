@@ -1,0 +1,79 @@
+---
+title: "02. Porto Container Architecture"
+description: "Kiến trúc Porto Container và các Pattern cốt lõi trong Superdong Booking System"
+---
+
+# Kiến Trúc Porto Container
+
+Hệ thống Superdong Booking áp dụng kiến trúc **Porto** để tổ chức mã nguồn. Porto tập trung vào việc gom nhóm logic theo các **Container (Tính năng/Domain)** thay vì phân tầng MVC truyền thống.
+
+## I. Cấu Trúc Porto (Porto Sections)
+
+Mã nguồn được chia thành hai Section chính:
+1. **Ship (Core/Hạ tầng)**: Chứa các thành phần dùng chung (Middlewares, Base Classes, Exceptions, Utilities).
+2. **Containers (Nghiệp vụ)**: Mỗi Container đại diện cho một Domain / Bounded Context khép kín.
+
+Ví dụ về thư mục:
+```text
+app/
+├── Ship/
+│   ├── Parents/
+│   ├── Middlewares/
+│   └── Exceptions/
+└── Containers/
+    ├── BookingSection/
+    │   ├── Booking/
+    │   ├── Ticket/
+    │   └── TripSeatInventory/
+    └── PaymentSection/
+        └── VnpayGateway/
+```
+
+Mỗi Container tuân thủ quy tắc nội bộ: `UI` (Controllers, CLI) -> `Actions` -> `Tasks` -> `Models/Repositories`.
+
+## II. Single Task Transaction Pattern
+
+Thay vì viết logic cồng kềnh trong một Action duy nhất, mọi thay đổi gốc rễ vào Database đều được tách thành các **Task** nhỏ gọn. 
+
+Mỗi Action chỉ điều phối các Task. **Transaction (DB Transaction)** được bọc ở tầng Action.
+
+```php
+// Một ví dụ giả mã (Pseudo-code)
+class CreateBookingAction {
+    public function run(DTO $dto) {
+        return DB::transaction(function() use ($dto) {
+            // Task 1: Check và Lock ghế
+            $inventory = $this->checkAndLockSeatTask->run($dto->tripId, $dto->qty);
+            
+            // Task 2: Tạo record Booking
+            $booking = $this->createBookingRecordTask->run($dto);
+            
+            return $booking;
+        });
+    }
+}
+```
+
+## III. Global Lock Order (Nguyên tắc Khóa Toàn Cục)
+
+Để giải quyết triệt để bài toán **Deadlock** khi nhiều Request cùng cố gắng lock các ghế hoặc bảng dữ liệu giống nhau. Hệ thống áp dụng **Global Lock Order**.
+
+**Quy tắc:** Mọi thao tác cần lock ( `SELECT ... FOR UPDATE` ) phải luôn lấy Lock theo một thứ tự từ điển (Alphabetical) hoặc thứ tự ID định sẵn.
+
+- **Bad**: Request A lock Trip 1 rồi lock Trip 2. Request B lock Trip 2 rồi lock Trip 1 -> **DEADLOCK**.
+- **Good (Global Lock Order)**: Mọi request phải sắp xếp ID (Trip 1, Trip 2). A và B đều lock Trip 1 trước, sau đó mới tới Trip 2. Một request sẽ phải đợi request kia mà không bị Deadlock.
+
+## IV. Transactional Outbox Pattern
+
+Trong môi trường thực tế (In the wild), việc gọi API bên ngoài (Gửi SMS, Email) trong cùng 1 Transaction của DB là một **thảm họa**.
+
+**Giải pháp: Outbox Pattern**
+1. Transaction lưu Booking.
+2. Cùng Transaction đó, insert 1 dòng vào bảng `outbox_messages` (Trạng thái: PENDING).
+3. Transaction Commit (Rất nhanh).
+4. Một Worker/Cronjob (Asynchronous) liên tục quét bảng `outbox_messages` và gọi API ngoại. Gửi xong cập nhật thành PUBLISHED.
+
+<Callout type="tip">
+  **Liều thuốc tiên (Silver Bullet) cho tính toàn vẹn dữ liệu**
+  Outbox đảm bảo Event chắc chắn sẽ được xử lý (At-least-once delivery) mà không làm chậm API tạo Booking của người dùng.
+</Callout>

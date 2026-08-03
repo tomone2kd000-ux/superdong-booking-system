@@ -1,0 +1,62 @@
+---
+title: "04. Xuất Hóa Đơn Bán Lẻ & Dữ Liệu Hóa Đơn VAT (DEC-024, DEC-025)"
+description: "Phát hành Hóa đơn bán lẻ nội bộ và tích hợp kết nối xuất Hóa đơn VAT bên ngoài (DEC-024, DEC-025)"
+---
+
+# Xuất Hóa Đơn Bán Lẻ & Dữ Liệu Hóa Đơn VAT
+
+Quản lý chứng từ tài chính và nghĩa vụ thuế đối với từng Booking.
+
+---
+
+## 🎯 Bài Toán Nghiệp Vụ (DEC-024, DEC-025)
+
+1. **Hóa Đơn Bán Lẻ Nội Bộ (DEC-025)**: Hệ thống mới hỗ trợ quản lý và in **Hóa đơn bán lẻ (Retail Invoice)** trực tiếp cho khách hàng mua vé tại quầy hoặc tải file PDF trên website.
+2. **Xuất Hóa Đơn VAT Qua Hệ Thống Bên Ngoài (DEC-024)**: Hóa đơn GTGT (VAT) được phát hành qua phần mềm hóa đơn điện tử bên ngoài (như Viettel S-Invoice / VNPT Invoice). Hệ thống mới lưu trữ thông tin công ty, MST và đẩy dữ liệu qua API/Queue tích hợp.
+
+---
+
+## 💡 Giải Pháp Kiến Trúc Backend
+
+![Grug Retail VAT Invoice](/images/grug_retail_vat_invoice.jpeg)
+
+- **Retail Invoice Generation**: Ngay khi Booking chuyển trạng thái `PAID`, sinh mã `invoice_no` nội bộ và file PDF Hóa đơn bán lẻ.
+- **VAT Integration Queue**: Đẩy message `ExportVATInvoiceJob` vào RabbitMQ / Redis Queue để bên thứ ba phát hành hóa đơn VAT điện tử.
+
+---
+
+## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO
+
+```mermaid
+erDiagram
+    BOOKINGS ||--o| RETAIL_INVOICES : issues
+    BOOKINGS ||--o| VAT_INVOICE_REQUESTS : requests
+
+    RETAIL_INVOICES {
+        bigint id PK
+        bigint booking_id FK
+        string invoice_no UK "INV-2026-881"
+        decimal total_amount
+        timestamp issued_at
+    }
+
+    VAT_INVOICE_REQUESTS {
+        bigint id PK
+        bigint booking_id FK
+        string company_name "Công ty TNHH ABC"
+        string tax_code "0101234567"
+        string company_address
+        string status "PENDING | SENT | EXPORTED | FAILED"
+    }
+```
+
+### 🔍 Lý Giải TẠI SAO (Schema Rationale):
+- **Vì sao tách `RETAIL_INVOICES` và `VAT_INVOICE_REQUESTS`?**: Hóa đơn bán lẻ được xuất tự động 100% cho mọi Booking thanh toán thành công. Trong khi Hóa đơn VAT chỉ phát sinh khi khách hàng chủ động tích chọn yêu cầu và nhập thông tin MST công ty.
+
+---
+
+## 🗿 Grug Đúc Kết
+
+<Callout type="tip">
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Hóa đơn bán lẻ Grug tự in ngay tại quầy! Hóa đơn VAT thuế nhà nước thì gửi qua con cú đưa thư cho phần mềm bên ngoài!"*
+</Callout>

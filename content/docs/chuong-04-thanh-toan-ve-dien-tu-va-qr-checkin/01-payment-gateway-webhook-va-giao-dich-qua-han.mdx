@@ -1,0 +1,72 @@
+---
+title: "01. Payment Webhook & Xử Lý Giao Dịch Quá Hạn (DEC-030, DEC-031)"
+description: "Xử lý Webhook cổng thanh toán bất đồng bộ, giao dịch thành công sau khi hết hạn (DEC-030) và trạng thái UNKNOWN (DEC-031)"
+---
+
+# Payment Webhook & Xử Lý Giao Dịch Quá Hạn
+
+Tích hợp cổng thanh toán trực tuyến (VNPAY, MoMo) là luồng bất đồng bộ (Asynchronous Webhook).
+
+---
+
+## 🎯 Bài Toán Nghiệp Vụ & Quyết Định Sếp Hiếu (DEC-030, DEC-031)
+
+1. **Thanh toán thành công SAU KHI đơn đã bị hủy hết hạn (DEC-030)**: Khách chuyển tiền VNPAY lúc 14:59, nhưng VNPAY nhè nhẹ nghẽn mạng đến 15:05 mới gửi Webhook báo thành công. Lúc 15:00, Cronjob ở Backend đã nhả ghế và hủy đơn `EXPIRED`!
+   - **Xử lý (DEC-030)**: **KHÔNG tự động khôi phục Booking hay phát hành vé**! Giao dịch được chuyển sang bảng `payment_reconciliations` ở trạng thái `RECONCILE_NEEDED` để Staff xem xét hoàn tiền hoặc xếp ghế thủ công.
+2. **Trạng thái UNKNOWN (DEC-031)**: Nếu cổng thanh toán trả về trạng thái không rõ ràng, **khóa không cho khách tạo Payment mới** cho Booking đó cho tới khi hoàn tất đối soát.
+
+---
+
+## 💡 Giải Pháp Kiến Trúc Backend
+
+![Grug Expired Payment Reconcile](/images/grug_expired_payment_reconcile.jpeg)
+
+```mermaid
+flowchart TD
+    Webhook["Cổng thanh toán gửi Webhook<br/>(Transaction Successful)"] --> LockBooking["Acquire Lock on Booking ID"]
+    LockBooking --> CheckStatus{"Trạng thái Booking hiện tại?"}
+    
+    CheckStatus -->|UNPAID & Held Valid| Success["Cập nhật Booking -> PAID<br/>Phát hành Vé & QR Code"]
+    CheckStatus -->|EXPIRED hoặc CANCELLED| DEC30["Thực hiện DEC-030:<br/>Ghi nhận Payment -> RECONCILE_NEEDED"]
+    
+    DEC30 --> LogReconcile["Tạo bản ghi payment_reconciliations<br/>Báo động Staff trên Admin Portal"]
+    DEC30 --> KeepExpired["Giữ nguyên Booking = EXPIRED<br/>Không tự cấp vé"]
+```
+
+---
+
+## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO
+
+```mermaid
+erDiagram
+    BOOKINGS ||--|{ PAYMENTS : receives
+    PAYMENTS ||--o| PAYMENT_RECONCILIATIONS : requires
+
+    PAYMENTS {
+        bigint id PK
+        bigint booking_id FK
+        string gateway "VNPAY | MOMO"
+        string transaction_no
+        decimal amount
+        string status "SUCCESS | FAILED | RECONCILE_NEEDED"
+    }
+
+    PAYMENT_RECONCILIATIONS {
+        bigint id PK
+        bigint payment_id FK
+        string reason "PAYMENT_AFTER_EXPIRED"
+        string resolution "REFUNDED | REASSIGNED_SEAT | PENDING"
+        bigint resolved_by_user_id FK
+    }
+```
+
+### 🔍 Lý Giải TẠI SAO (Schema Rationale):
+- **Vì sao có bảng `PAYMENT_RECONCILIATIONS`?**: Để tiền của khách không bao giờ bị rơi vào "khoảng không vô hình". Mọi giao dịch lỗi nhịp mạng đều được đưa vào hàng chờ đối soát với đầy đủ Audit Trail.
+
+---
+
+## 🗿 Grug Đúc Kết
+
+<Callout type="tip">
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Tiền về muộn khi ghế đã nhả cho người khác thì Grug cất tiền vào rương đối soát! Không tự tiện in vé trùng cho 2 người!"*
+</Callout>

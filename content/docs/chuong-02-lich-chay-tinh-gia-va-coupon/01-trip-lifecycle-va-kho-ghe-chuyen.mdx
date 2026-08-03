@@ -1,0 +1,73 @@
+---
+title: "01. Vòng Đời Chuyến Tàu & Quản Lý Kho Ghế Chuyến"
+description: "Quản lý vòng đời Chuyến tàu (Trip Lifecycle) và Kho ghế khả dụng theo từng chuyến (Trip Seat Inventory)"
+---
+
+# Vòng Đời Chuyến Tàu & Quản Lý Kho Ghế Chuyến
+
+Mỗi Chuyến tàu (`TRIP`) đại diện cho một hành trình di chuyển cụ thể của một con tàu vào ngày giờ xác định.
+
+---
+
+## 🎯 Bài Toán Nghiệp Vụ
+
+Tàu Superdong I có 275 ghế. Khi mở bán chuyến 8h00 ngày 10/02, hệ thống phải biết chính xác từng vị trí ghế A01, A02... đang ở trạng thái nào: **Khả dụng (AVAILABLE)**, **Đang giữ chỗ (HELD)**, **Đã bán (SOLD)** hay **Khóa kỹ thuật (BLOCKED)**.
+
+---
+
+## 💡 Giải Pháp Kiến Trúc Backend
+
+![Grug Trip Lifecycle](/images/grug_trip_lifecycle.jpeg)
+
+```mermaid
+stateDiagram-v2
+    [*] --> SCHEDULED : Lên lịch chạy
+    SCHEDULED --> BOARDING : Mở cửa đón khách (Trước 30p)
+    BOARDING --> DEPARTED : Tàu rời bến (Khóa bán vé)
+    DEPARTED --> COMPLETED : Tàu cập bến đích
+    SCHEDULED --> CANCELLED : Bão / Sự cố kỹ thuật
+    BOARDING --> CANCELLED : Sự cố đột xuất
+```
+
+- **TRIP.status = DEPARTED**: Ngay khi tàu rời bến, hệ thống khóa 100% việc đặt vé mới trên chuyến đó (INV-017).
+- **SSOT Kho Ghế**: Bảng `trip_seat_inventories` là Nguồn chân lý duy nhất (SSOT) cho số lượng ghế còn trống.
+
+---
+
+## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO
+
+```mermaid
+erDiagram
+    TRIPS ||--|{ TRIP_SEAT_INVENTORIES : initializes
+    SEATS ||--|{ TRIP_SEAT_INVENTORIES : maps
+
+    TRIPS {
+        bigint id PK
+        bigint route_id FK
+        bigint vessel_id FK
+        bigint layout_id FK
+        timestamp departure_time
+        timestamp arrival_time
+        string status "SCHEDULED | BOARDING | DEPARTED | COMPLETED | CANCELLED"
+    }
+
+    TRIP_SEAT_INVENTORIES {
+        bigint id PK
+        bigint trip_id FK
+        bigint seat_id FK
+        string status "AVAILABLE | HELD | SOLD | BLOCKED"
+        timestamp held_until
+        bigint locked_by_booking_id FK
+    }
+```
+
+### 🔍 Lý Giải TẠI SAO (Schema Rationale):
+- **Vì sao `TRIP_SEAT_INVENTORIES` có `locked_by_booking_id` (FK)?**: Để khi một Booking bị hết hạn (`EXPIRED`) hoặc bị hủy, hệ thống chỉ cần tìm đúng các bản ghi inventory có `locked_by_booking_id` đó để giải phóng trạng thái về `AVAILABLE` một cách tức thì.
+
+---
+
+## 🗿 Grug Đúc Kết
+
+<Callout type="tip">
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Thuyền nhổ neo nhấc mỏ neo lên là Grug lập tức đóng hòm phiếu bán vé! Ai chưa lên thuyền thì ở lại bến!"*
+</Callout>

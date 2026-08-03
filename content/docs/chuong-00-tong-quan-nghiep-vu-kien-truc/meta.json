@@ -1,0 +1,9 @@
+{
+  "title": "Chương 00: Tổng Quan Nghiệp Vụ & Sơ Đồ ERD",
+  "pages": [
+    "01-buc-tranh-tong-quan-va-6-man-hinh-figma",
+    "02-strategic-domain-va-bounded-contexts",
+    "03-porto-container-architecture",
+    "04-erd-database-design-va-41-decisions"
+  ]
+}

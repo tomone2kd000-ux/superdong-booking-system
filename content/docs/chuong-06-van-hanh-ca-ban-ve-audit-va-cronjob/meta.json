@@ -1,0 +1,8 @@
+{
+  "title": "Chương 06: Quản Trị Ca Làm Việc, Cronjob & Audit Log",
+  "pages": [
+    "01-cronjob-auto-release-va-outbox-pattern",
+    "02-quan-ly-ca-lam-viec-va-ket-ca",
+    "03-rbac-station-scoped-va-audit-log-append-only"
+  ]
+}

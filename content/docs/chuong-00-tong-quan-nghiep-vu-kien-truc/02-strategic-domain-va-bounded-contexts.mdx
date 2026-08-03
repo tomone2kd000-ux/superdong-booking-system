@@ -1,0 +1,117 @@
+---
+title: "02. Strategic Domain & Bounded Contexts"
+description: "Bản đồ ranh giới nghiệp vụ và Ma trận phân quyền các tác nhân (Actor Matrix) trong Superdong"
+---
+
+# Strategic Domain & Bounded Contexts
+
+Để tránh codebase rơi vào **Thảm họa Spaghetti code (Big ball of mud)**, hệ thống Superdong được chia thành 6 **Ranh giới nghiệp vụ độc lập (Bounded Contexts)**. Mỗi Bounded Context quản lý một miền dữ liệu khép kín.
+
+---
+
+## 🎯 Bài Toán Ranh Giới Nghiệp Vụ
+
+Nếu không phân rã Bounded Contexts, logic giữ ghế, tính giá vé, thanh toán và soát vé QR sẽ dính chặt vào nhau. Một thay đổi ở luồng soát vé bến tàu có thể làm sập luồng đặt vé online Tết!
+
+---
+
+## 💡 Phân Rã 6 Bounded Contexts Cốt Lõi
+
+![Grug Bounded Contexts](/images/grug_bounded_contexts.jpeg)
+
+```mermaid
+flowchart TD
+    subgraph MasterDataDomain [1. Master Data Context]
+        MD1[Locations & Ports]
+        MD2[Routes & Journeys]
+        MD3[Vessels & Layout JSON]
+    end
+
+    subgraph TripDomain [2. Trip & Fleet Context]
+        T1[Schedules & Trips]
+        T2[Trip Seat Inventories]
+        T3[Dynamic Pricing Engine]
+    end
+
+    subgraph BookingDomain [3. Booking & Hold Context]
+        B1[Booker & Passengers]
+        B2[Redis Distributed Lock]
+        B3[Hold Token Management]
+    end
+
+    subgraph PaymentDomain [4. Payment Context]
+        P1[Online Payment Gateway]
+        P2[Counter Cash Payment]
+        P3[Retail Invoice & VAT Export]
+    end
+
+    subgraph CheckinDomain [5. Check-in Context]
+        C1[QR Code Generator]
+        C2[Scanner Device API]
+        C3[Group & Individual Boarding]
+    end
+
+    subgraph OperationDomain [6. Operation & Incident Context]
+        O1[Vessel Change & Seat Reselect]
+        O2[Trip Cancellation & Delay]
+        O3[Refund & Exchange Audit]
+    end
+
+    MasterDataDomain --> TripDomain
+    TripDomain --> BookingDomain
+    BookingDomain --> PaymentDomain
+    PaymentDomain --> CheckinDomain
+    BookingDomain -. Biến cố .-> OperationDomain
+```
+
+---
+
+## 👥 Actor Matrix (Ma Trận Người Dùng)
+
+![Grug Actor Matrix](/images/grug_actor_matrix.jpeg)
+
+Hệ thống phục vụ 5 nhóm tác nhân chính với phạm vi quyền hạn tách biệt:
+
+| Actor (Tác nhân) | Hình thức Truy cập | Vai trò & Quyền hạn Nghiệp vụ | Giới hạn An toàn Backend |
+| :--- | :--- | :--- | :--- |
+| **Khách Vãng Lai (Guest)** | Web Public (No Login) | Tìm chuyến, đặt vé, chọn ghế, thanh toán. Nhận link tra cứu vé qua Email. | Phải xác minh OTP khi đổi thông tin hoặc hủy vé (DEC-035). |
+| **Khách Tài Khoản (Account)** | Web/App Member | Đặt vé nhanh, lưu thông tin hành khách, nhận ưu đãi khuyến mãi riêng. | Chỉ xem & quản lý Booking do chính mình tạo (DEC-040). |
+| **Nhân Viên Quầy (Staff)** | Backoffice App | Bán vé tại quầy, thu tiền mặt, in vé, hỗ trợ khách đổi/hủy vé theo chính sách. | Phân quyền theo Bến (Station-scoped RBAC - DEC-034). |
+| **Soát Vé (Checker)** | Thiết bị Handheld QR | Quét mã QR tại cầu cảng để xác nhận hành khách lên tàu (Boarded). | Chỉ quét check-in online; Cấm Check-in Offline (DEC-037). |
+| **Quản Lý (Manager)** | Backoffice Admin | Đổi tàu, hủy/hoãn chuyến, duyệt hoàn tiền, ghi đè check-in nhầm, xem Audit Log. | Có quyền Override & thao tác biến cố vận hành cao nhất. |
+
+---
+
+## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO
+
+```mermaid
+erDiagram
+    USERS ||--o| BOOKINGS : creates
+    STATIONS ||--|{ USERS : scopes
+    STATIONS ||--|{ TRIPS : departs_from
+
+    USERS {
+        bigint id PK
+        string email
+        string role "GUEST | ACCOUNT | STAFF | CHECKER | MANAGER"
+        bigint station_id FK "Null for Guest/Account"
+    }
+
+    STATIONS {
+        bigint id PK
+        string station_code UK
+        string name
+    }
+```
+
+### 🔍 Lý Giải TẠI SAO (Schema Rationale):
+- **Vì sao `USERS` có `station_id` (FK)?**: Nhân viên phòng vé (`STAFF`) tại Bến Rạch Giá không được phép bán vé hay chỉnh sửa chuyến của Bến Hà Tiên. Phân quyền RBAC gắn chặt với `station_id`.
+- **Vì sao `GUEST` không cần tạo Account?**: Để giảm tối đa ma sát checkout (DEC-029). Hệ thống tự sinh `guest_session` và mã bảo mật tra cứu qua Email/SMS.
+
+---
+
+## 🗿 Grug Đúc Kết
+
+<Callout type="tip">
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Người rừng đi săn (Guest) không cần đăng ký hộ khẩu cảng! Chỉ cần để lại tên và số điện thoại, Grug đưa vé là xong!"*
+</Callout>

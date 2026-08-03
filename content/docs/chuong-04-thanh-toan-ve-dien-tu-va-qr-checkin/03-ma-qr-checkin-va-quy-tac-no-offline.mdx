@@ -1,0 +1,75 @@
+---
+title: "03. Mã QR Check-in & Quy Tắc Không Check-in Offline (DEC-022, DEC-037)"
+description: "Cơ chế mã QR check-in toàn bộ đơn vs từng khách (DEC-022) và quy định cấm Check-in Offline trong MVP (DEC-037)"
+---
+
+# Mã QR Check-in & Quy Tắc Không Check-in Offline
+
+Kiểm soát hành khách lên tàu tại cầu cảng thông qua thiết bị quét mã QR chuyên dụng.
+
+---
+
+## 🎯 Bài Toán Nghiệp Vụ & Quyết Định (DEC-022, DEC-037)
+
+1. **Check-in Đoàn vs Check-in Lẻ (DEC-022)**: Hệ thống hỗ trợ cả 2 hình thức:
+   - **QR Toàn Đơn**: 1 mã QR cho cả gia đình 5 người. Quét 1 lần check-in toàn bộ hoặc nhân viên chọn những người thực tế lên tàu.
+   - **QR Cá Nhân**: Mỗi hành khách có 1 QR riêng biệt trên vé điện tử.
+2. **Cấm Check-in Offline Trong MVP (DEC-037)**: MVP không hỗ trợ Check-in Offline. Khi mất kết nối mạng tại cảng, thiết bị quét không ghi nhận check-in local để tránh sai lệch danh sách Manifest nộp Cảng vụ.
+
+---
+
+## 💡 Giải Pháp Kiến Trúc Backend
+
+![Grug QR Checkin Group Indiv](/images/grug_qr_checkin_group_indiv.jpeg)
+
+Mã QR được ký bằng chữ ký số HMAC-SHA256: `payload = booking_code:ticket_code:timestamp:signature`.
+
+```mermaid
+flowchart TD
+    Scan["Checker quét mã QR tại cầu cảng"] --> ValidateNet{"Kiểm tra kết nối Online<br/>(DEC-037)"}
+    
+    ValidateNet -->|Mất kết nối| ErrorNet["Báo lỗi: Mất kết nối mạng!<br/>Chặn Check-in Offline"]
+    ValidateNet -->|Có mạng Online| ParseQR["Decode HMAC Signature"]
+    
+    ParseQR --> CheckType{"Loại mã QR?"}
+    CheckType -->|QR Toàn Đơn| GroupCheck["Hiển thị danh sách 5 khách<br/>Nhân viên chọn khách thực tế lên tàu"]
+    CheckType -->|QR Cá Nhân| SingleCheck["Xác nhận 1 hành khách lên tàu"]
+    
+    GroupCheck --> SaveCheckin["Tạo bản ghi check_ins<br/>Cập nhật status = CHECKED_IN"]
+    SingleCheck --> SaveCheckin
+```
+
+---
+
+## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO
+
+```mermaid
+erDiagram
+    TICKETS ||--o| CHECK_INS : records
+    USERS ||--|{ CHECK_INS : performed_by
+
+    TICKETS {
+        bigint id PK
+        string ticket_code UK
+        string status "ISSUED -> CHECKED_IN"
+    }
+
+    CHECK_INS {
+        bigint id PK
+        bigint ticket_id FK
+        bigint checked_by_user_id FK "Checker ID"
+        timestamp checked_in_at
+        string device_id
+    }
+```
+
+### 🔍 Lý Giải TẠI SAO (Schema Rationale):
+- **Vì sao có `device_id` và `checked_by_user_id` trong `CHECK_INS`?**: Phục vụ công tác an ninh hàng hải và Audit Log. Nếu có sự cố hành khách lên sai tàu, quản lý biết chính xác nhân viên nào và máy quét nào đã thực hiện lệnh check-in đó.
+
+---
+
+## 🗿 Grug Đúc Kết
+
+<Callout type="tip">
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Kính búp phóng to QR của bảo vệ cảng phải cắm dây mạng trực tiếp! Mất mạng là dừng quét, không đoán mò!"*
+</Callout>

@@ -1,0 +1,120 @@
+---
+title: "03. ERD & Database Design"
+description: "Thiết kế cơ sở dữ liệu vật lý và Logic ERD cho hệ thống đặt vé tàu"
+---
+
+# Thiết Kế Cơ Sở Dữ Liệu (ERD)
+
+Thiết kế Database của Superdong Booking System phải đáp ứng được khả năng mở rộng, lưu trữ lịch sử cấu hình (Master Data) để không làm gãy các giao dịch cũ, và đặc biệt là quản lý kho ghế (Inventory) an toàn dưới môi trường Concurrent.
+
+## I. Danh Sách 33 Thực Thể Logic
+
+Dưới đây là 33 bảng cốt lõi (Phân nhóm theo Context):
+
+<details>
+<summary><b>Nhóm Master Data & Cấu hình</b></summary>
+
+1. `users`: Tài khoản đăng nhập (Khách, Nhân viên).
+2. `roles`: Vai trò phân quyền.
+3. `permissions`: Quyền hạn chi tiết.
+4. `ports`: Bến cảng.
+5. `routes`: Tuyến đường (Bến A -> Bến B).
+6. `ships`: Tàu thuyền vật lý.
+7. `ship_classes`: Hạng tàu.
+8. `seat_classes`: Hạng ghế (ECO, VIP).
+9. `tariffs`: Bảng giá chuẩn (Master Price).
+</details>
+
+<details>
+<summary><b>Nhóm Chuyến Tàu (Trip) & Inventory</b></summary>
+
+10. `trips`: Các chuyến tàu cụ thể (Ngày, Giờ).
+11. `trip_seat_inventories`: Kho ghế của chuyến (Rất quan trọng).
+12. `trip_prices`: Bảng giá cụ thể cho chuyến (Snapshot từ tariffs).
+13. `trip_statuses`: Lịch sử thay đổi trạng thái của Trip.
+</details>
+
+<details>
+<summary><b>Nhóm Đặt Vé (Booking & Ticket)</b></summary>
+
+14. `bookings`: Giao dịch đặt vé (Đơn hàng).
+15. `booking_passengers`: Thông tin hành khách trong Booking.
+16. `tickets`: Vé thực tế cấp cho Passenger (Có mã QR).
+17. `ticket_histories`: Lịch sử đổi vé, hủy vé.
+18. `manifests`: Danh sách tổng hợp nộp cảng vụ.
+19. `discounts`: Mã giảm giá / Promo.
+20. `booking_discounts`: Áp dụng giảm giá vào Booking.
+</details>
+
+<details>
+<summary><b>Nhóm Tài Chính (Payment & Agent)</b></summary>
+
+21. `payments`: Lịch sử giao dịch thanh toán (VNPAY, Tiền mặt).
+22. `invoices`: Hóa đơn điện tử.
+23. `agents`: Hồ sơ Đại lý.
+24. `agent_transactions`: Biến động số dư nợ của Đại lý (Ledger).
+</details>
+
+<details>
+<summary><b>Nhóm Hệ thống & Hạ tầng</b></summary>
+
+25. `outbox_messages`: Lưu event Asynchronous.
+26. `audit_logs`: Nhật ký thay đổi dữ liệu (AI).
+27. `sms_logs`: Nhật ký gửi tin nhắn.
+28. `email_templates`: Mẫu Email.
+29. `system_configs`: Cấu hình động toàn hệ thống.
+30. `jobs`: Failed jobs, queue (Laravel/Queue DB).
+31. `sessions`: Lưu session (Nếu không dùng Redis).
+32. `personal_access_tokens`: Token đăng nhập (API).
+33. `password_resets`: Bảng reset mật khẩu.
+</details>
+
+---
+
+## II. Bí Mật Của Bảng `trip_seat_inventories`
+
+Đây là bảng quan trọng nhất để giải quyết bài toán Concurrency (Nhiều người cùng mua 1 vé cuối cùng).
+
+**Cấu trúc physical:**
+- `id` (PK)
+- `trip_id` (FK)
+- `seat_class_id` (FK)
+- `total_seats`: Tổng ghế vật lý có sẵn (Ví dụ: 100)
+- `held_seats`: Ghế đang giữ (Chờ thanh toán). (Ví dụ: 5)
+- `sold_seats`: Ghế đã bán thành công. (Ví dụ: 90)
+- `version_no`: Dùng cho Optimistic Locking.
+
+**Quy tắc tính ghế trống (Available Seats):**
+`Available = total_seats - held_seats - sold_seats` (100 - 5 - 90 = 5 ghế trống).
+
+**Cơ chế bên dưới (Under the hood):**
+Khi khách hàng bắt đầu Booking, chúng ta KHÔNG INSERT từng dòng ghế. Chúng ta gọi câu lệnh SQL với **Pessimistic Lock**:
+```sql
+SELECT total_seats, held_seats, sold_seats 
+FROM trip_seat_inventories 
+WHERE trip_id = 1 AND seat_class_id = 1
+FOR UPDATE;
+
+-- Kiem tra Available >= So luong khach muon mua.
+-- Neu thoa, update:
+UPDATE trip_seat_inventories 
+SET held_seats = held_seats + [Qty]
+WHERE trip_id = 1 AND seat_class_id = 1;
+```
+
+---
+
+## III. Mối Quan Hệ Cốt Lõi (Kèm Lý Do WHY)
+
+(Đây là trích đoạn của 47 mối quan hệ, đại diện cho những liên kết xương sống).
+
+1. **`bookings` 1-N `tickets`**: WHY? Một Booking (Người mua) có thể mua nhiều Vé cho gia đình. Phải tách rời Đơn hàng (Booking) và Vé (Ticket).
+2. **`trips` 1-N `trip_seat_inventories`**: WHY? Một chuyến tàu có nhiều hạng ghế (ECO, VIP). Mỗi hạng ghế có một bộ đếm số lượng độc lập.
+3. **`tickets` N-1 `booking_passengers`**: WHY? Mỗi vé định danh cho 1 hành khách cụ thể. Khách hàng cầm QR code quét, hệ thống biết vé đó của ai.
+4. **`agents` 1-N `agent_transactions`**: WHY? Dùng mô hình Sổ Cái (Ledger) dạng Append-only để cộng/trừ tiền hạn mức, tuyệt đối không dùng 1 cột `balance` rồi update trực tiếp (dễ sai lệch và khó trace).
+5. **`trips` 1-N `trip_prices`**: WHY? Nếu chuyến tàu đã tạo, không được liên kết trực tiếp giá vào bảng `tariffs` gốc. Giá phải được snapshot (sao chép) sang `trip_prices` để đề phòng ngày mai Admin đổi giá chung nhưng chuyến cũ không bị ảnh hưởng.
+
+<Callout type="warning">
+  **Mô hình Nghiệp vụ**
+  Thiết kế Database này không đơn thuần là bảng lưu trữ, mà nó phản chiếu trực tiếp các **Quy tắc nghiệp vụ** và **Invariants** đã định nghĩa.
+</Callout>

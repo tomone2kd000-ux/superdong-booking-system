@@ -1,0 +1,73 @@
+---
+title: "02. Thanh Toán Tại Quầy & Quy Trình Phát Hành Vé (DEC-006 đến DEC-008)"
+description: "Quy trình cấp Booking Code tại quầy, nguyên tắc chưa có vé/QR khi chưa thu tiền và phát hành vé điện tử (DEC-006, DEC-007, DEC-008)"
+---
+
+# Thanh Toán Tại Quầy & Quy Trình Phát Hành Vé
+
+Đặt vé và thanh toán tại quầy tuân thủ chặt chẽ 3 quyết định cốt lõi của sếp Hùng.
+
+---
+
+## 🎯 Bài Toán Nghiệp Vụ (DEC-006, DEC-007, DEC-008)
+
+1. **Chưa thu tiền = Chưa có Vé & QR (DEC-006, DEC-007)**: Khách chọn "Thanh toán tại quầy" trên web hoặc đặt giữ chỗ qua điện thoại -> Hệ thống chỉ cấp **Mã đặt chỗ (Booking Code)** ở trạng thái chưa thanh toán. **Hoàn toàn KHÔNG phát hành vé điện tử và KHÔNG có mã QR hợp lệ**.
+2. **Xác nhận thu tiền -> Phát hành Vé & QR (DEC-008)**: Khi khách đến quầy đưa tiền mặt/quẹt thẻ, Nhân viên bấm nút "Xác nhận đã thu tiền" -> Hệ thống mới phát hành Vé điện tử (`TICKETS`) và Mã QR để lên tàu.
+
+---
+
+## 💡 Giải Pháp Kiến Trúc Backend
+
+![Grug Counter Ticket Issue](/images/grug_counter_ticket_issue.jpeg)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Customer as Khách hàng / Staff
+    participant API as BookingAPI
+    participant DB as Database
+    participant Event as TicketIssuedEvent
+
+    Customer->>API: POST /api/v1/counter/confirm-payment (booking_code)
+    API->>DB: Check Booking Status == UNPAID & held_until > NOW()
+    API->>DB: Update BOOKINGS.status = 'PAID'
+    API->>DB: Create TICKETS records for each Passenger
+    API->>DB: Generate HMAC Signed QR Hashes
+    API->>Event: dispatch(PaymentReceivedEvent)
+    API-->>Customer: Return E-Tickets & Printable QR PDF
+```
+
+---
+
+## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO
+
+```mermaid
+erDiagram
+    BOOKINGS ||--|{ TICKETS : generates_on_paid
+
+    BOOKINGS {
+        bigint id PK
+        string booking_code UK "SD-88992"
+        string status "UNPAID (Chưa thu tiền) -> PAID (Đã thu tiền)"
+        decimal grand_total
+    }
+
+    TICKETS {
+        bigint id PK
+        bigint passenger_id FK
+        string ticket_code UK "TK-2026-001"
+        string qr_hash "HMAC_SHA256"
+        timestamp issued_at "Chỉ populated khi Booking PAID"
+    }
+```
+
+### 🔍 Lý Giải TẠI SAO (Schema Rationale):
+- **Vì sao không tạo bản ghi `TICKETS` trước ở trạng thái `INACTIVE`?**: Để đảm bảo nguyên tắc bất biến (INV-003): *"Ticket chỉ được khởi tạo khi Booking đã thanh toán"*. Điều này loại bỏ hoàn toàn rủi ro rò rỉ mã QR giả lên tàu.
+
+---
+
+## 🗿 Grug Đúc Kết
+
+<Callout type="tip">
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Đưa vỏ sò tiền mặt cho tù trưởng phòng vé! Nhận đủ tiền thì hòn đá QR mới được khắc hình phát sáng!"*
+</Callout>

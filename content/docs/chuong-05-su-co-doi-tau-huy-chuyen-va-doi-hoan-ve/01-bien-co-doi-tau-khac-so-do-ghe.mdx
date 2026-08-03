@@ -1,0 +1,84 @@
+---
+title: "01. Xử Lý Biến Cố Đổi Tàu Khác Sơ Đồ Ghế (DEC-002 đến DEC-005)"
+description: "Quy trình xử lý sự cố thay đổi tàu làm khác sơ đồ ghế, thông báo chọn lại ghế và gán ghế thủ công (DEC-002, DEC-003, DEC-004, DEC-005)"
+---
+
+# Xử Lý Biến Cố Đổi Tàu Khác Sơ Đồ Ghế
+
+Khi con tàu đã phân công bị hỏng hóc kỹ thuật, vận hành phải thay thế bằng một tàu khác có sơ đồ ghế hoàn toàn khác.
+
+---
+
+## 🎯 Bài Toán Nghiệp Vụ & Quyết Định Sếp Hùng (DEC-002 -> DEC-005)
+
+1. **Khách được tự chọn lại ghế (DEC-002)**: Đơn hàng và vé giữ nguyên. Hệ thống gửi thông báo kèm link portal để khách tự chọn lại vị trí ghế trên sơ đồ tàu mới.
+2. **Không tự động ánh xạ ghế (DEC-002, DEC-003)**: **KHÔNG viết thuật toán tự động đổi mã ghế cũ sang mã ghế mới** (ví dụ: ghế A12 tàu cũ không tự biến thành A12 tàu mới).
+3. **Thiết lập Hạn chót & Gán ghế thủ công (DEC-003, DEC-005)**: Người thực hiện đổi tàu nhập mốc **Hạn chót (Reselect Deadline)**. Nếu quá hạn mà khách chưa chọn, Nhân viên phòng vé gán ghế thủ công trên sơ đồ tàu mới.
+4. **Ưu tiên gia đình ngồi gần nhau (DEC-004)**: Ưu tiên các hành khách trong cùng 1 Booking được ngồi gần nhau. **MVP chưa làm thuật toán tự động xếp gia đình, Staff thao tác chọn thủ công**.
+
+---
+
+## 💡 Giải Pháp Kiến Trúc Backend
+
+![Grug Vessel Change Reassign](/images/grug_vessel_change_reassign.jpeg)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Manager as Quản Lý Vận Hành
+    participant API as OperationAPI
+    participant DB as Database
+    participant Event as VesselChangedEvent
+    actor Guest as Khách Hàng
+
+    Manager->>API: POST /api/v1/trips/{id}/change-vessel (new_vessel_id, deadline)
+    API->>DB: Update TRIP.vessel_id & set reselect_deadline
+    API->>DB: Reset TRIP_SEAT_INVENTORIES for new layout
+    API->>Event: dispatch(VesselChangedEvent)
+    Event-->>Guest: Send SMS/Email link to re-select seat
+    
+    alt Khách tự chọn trước Deadline
+        Guest->>API: POST /api/v1/bookings/{id}/reselect-seat
+        API->>DB: Lock new seat on new layout
+    else Quá Deadline chưa chọn
+        Manager->>API: POST /api/v1/trips/{id}/manual-assign-seats
+        API->>DB: Staff manually picks adjacent seats for booking group
+    end
+```
+
+---
+
+## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO
+
+```mermaid
+erDiagram
+    TRIPS ||--|{ VESSEL_CHANGE_EVENTS : records
+    VESSEL_CHANGE_EVENTS ||--|{ BOOKING_RESELECT_STATUSES : tracks
+
+    VESSEL_CHANGE_EVENTS {
+        bigint id PK
+        bigint trip_id FK
+        bigint old_vessel_id FK
+        bigint new_vessel_id FK
+        timestamp deadline
+        bigint created_by_user_id FK
+    }
+
+    BOOKING_RESELECT_STATUSES {
+        bigint id PK
+        bigint event_id FK
+        bigint booking_id FK
+        string status "PENDING_RESELECT | RESELECTED | MANUALLY_ASSIGNED"
+    }
+```
+
+### 🔍 Lý Giải TẠI SAO (Schema Rationale):
+- **Vì sao có `BOOKING_RESELECT_STATUSES`?**: Để Staff trên màn hình Admin lọc chính xác những Booking nào đã tự chọn lại ghế thành công, và những Booking nào đã chạm `deadline` mà chưa chọn ghế để tiến hành gán chỗ thủ công.
+
+---
+
+## 🗿 Grug Đúc Kết
+
+<Callout type="tip">
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Thuyền hỏng đổi thuyền mới! Dân làng được tự chọn lại chỗ ngồi trước giờ G! Quá giờ G thì tù trưởng phòng vé xếp chỗ cho cả nhà ngồi cạnh nhau!"*
+</Callout>

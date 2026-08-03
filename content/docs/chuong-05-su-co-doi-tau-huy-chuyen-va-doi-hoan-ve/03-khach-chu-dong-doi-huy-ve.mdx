@@ -1,0 +1,66 @@
+---
+title: "03. Khách Chủ Động Đổi/Hủy Vé & Chính Sách Phí (DEC-014, DEC-015, DEC-032, DEC-033)"
+description: "Luồng khách tự đổi/hủy vé trực tuyến hoặc tại quầy, ma trận khấu trừ phí phạt (DEC-032) và quy tắc vé dùng 1 phần (DEC-033)"
+---
+
+# Khách Chủ Động Đổi/Hủy Vé & Chính Sách Phí
+
+Khi hành khách có thay đổi lịch trình cá nhân và chủ động yêu cầu Đổi hoặc Hủy vé.
+
+---
+
+## 🎯 Bài Toán Nghiệp Vụ & Quyết Định Nổi Bật
+
+1. **3 Kênh Đổi Chuyến (DEC-015, DEC-016)**: Hệ thống hỗ trợ 3 kênh đổi chuyến: Đổi tại Quầy/Hotline, Gửi yêu cầu trên Web để Staff duyệt, hoặc Khách tự đổi trực tuyến. Các kênh này được bật/tắt linh hoạt bằng cấu hình.
+2. **Chính Sách Khấu Trừ Phí Hủy Vé (DEC-032)**: Phí hủy vé được tính dynamic theo mốc thời gian trước giờ tàu chạy:
+   - Hủy trước 24h: Phạt 10% giá vé.
+   - Hủy từ 2h đến 24h: Phạt 20% giá vé.
+   - Hủy dưới 2h hoặc sau khi tàu chạy: Phạt 100% (Không hoàn tiền).
+3. **Vé Đã Sử Dụng Một Phần (DEC-033)**: Đơn vé khứ hồi đã đi chiều đi (Partially used) -> **KHÔNG tự động hoàn tiền trực tuyến**. Staff tại quầy xem xét và quyết định thủ công từng trường hợp.
+
+---
+
+## 💡 Giải Pháp Kiến Trúc Backend
+
+![Grug Customer Cancel Fee](/images/grug_customer_cancel_fee.jpeg)
+
+Fare Engine tính toán tiền hoàn:
+
+$$Tiền\ Hoàn\ Trả = Tổng\ Tiền\ Vé - (Giá\ Vé \times \%\ Phí\ Phạt) - Phí\ Đổi\ Vé$$
+
+---
+
+## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO
+
+```mermaid
+erDiagram
+    CANCELLATION_POLICIES ||--|{ TICKET_CANCEL_REQUESTS : calculates
+
+    CANCELLATION_POLICIES {
+        bigint id PK
+        int hours_before_departure
+        decimal fee_percentage "10.00"
+        boolean is_active true
+    }
+
+    TICKET_CANCEL_REQUESTS {
+        bigint id PK
+        bigint booking_id FK
+        bigint ticket_id FK
+        decimal original_price
+        decimal fee_amount
+        decimal refund_amount
+        string status "PENDING_APPROVAL | APPROVED | REJECTED | AUTO_PROCESSED"
+    }
+```
+
+### 🔍 Lý Giải TẠI SAO (Schema Rationale):
+- **Vì sao có `status = PENDING_APPROVAL`?**: Theo DEC-014, hệ thống hỗ trợ cả chế độ Staff duyệt tay lẫn Auto-process. Đơn vé có giá trị lớn hoặc vé đoàn sẽ chuyển sang `PENDING_APPROVAL` để Quản lý duyệt trước khi nhả tiền.
+
+---
+
+## 🗿 Grug Đúc Kết
+
+<Callout type="tip">
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Trả vé sớm trước 1 ngày thì phạt 10 sò! Trả sát giờ thuyền chạy thì mất sạch tiền! Vé đã đi 1 chiều thì ra quầy gặp tù trưởng!"*
+</Callout>

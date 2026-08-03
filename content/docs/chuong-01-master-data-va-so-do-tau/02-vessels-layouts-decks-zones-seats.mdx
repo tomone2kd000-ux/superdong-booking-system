@@ -1,0 +1,70 @@
+---
+title: "02. Quản Lý Tàu & Sơ Đồ Ghế Động (Seat Layout JSON)"
+description: "Mô hình hóa Tàu (Vessel), Phiên bản sơ đồ (Layout Version), Tầng/Khoang và Cấu hình sơ đồ ghế động JSON"
+---
+
+# Quản Lý Tàu & Sơ Đồ Ghế Động (Seat Layout JSON)
+
+Mỗi con tàu của Superdong (Superdong I, II, VI, IX, VII...) có cấu trúc không gian và số lượng ghế hoàn toàn khác nhau.
+
+---
+
+## 🎯 Bài Toán Nghiệp Vụ
+
+Tàu Superdong I có 275 ghế chia 2 tầng. Khi bảo trì hoặc cải tạo khoang VIP, sơ đồ ghế thay đổi. Hệ thống không thể hardcode sơ đồ ghế vào mã nguồn mà phải quản lý dưới dạng **Phiên bản sơ đồ (Layout Version)** động.
+
+---
+
+## 💡 Giải Pháp Kiến Trúc Backend
+
+![Grug Vessel Layout JSON](/images/grug_vessel_layout_json.jpeg)
+
+- **Vessel (Tàu)**: Phương tiện vận tải thực tế (Tên tàu, Sức chứa tối đa, Mã IMO).
+- **Vessel Layout Version**: Phiên bản sơ đồ ghế áp dụng tại từng thời điểm.
+- **Decks & Zones (Tầng & Khoang)**: Tầng trệt (Lower Deck), Tầng lầu (Upper Deck); Khoang Phổ thông, Khoang VIP.
+- **Seat JSON (Cấu hình tọa độ)**: Mỗi ghế lưu tọa độ `(x, y)` trên lưới matrix 2D để Frontend vẽ lại sơ đồ ghế chính xác 100%.
+
+---
+
+## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO
+
+```mermaid
+erDiagram
+    VESSELS ||--|{ VESSEL_LAYOUTS : has
+    VESSEL_LAYOUTS ||--|{ SEATS : defines
+
+    VESSELS {
+        bigint id PK
+        string code UK "SD-01"
+        string name "Superdong I"
+        int total_capacity 275
+    }
+
+    VESSEL_LAYOUTS {
+        bigint id PK
+        bigint vessel_id FK
+        string version_name "v2026.1"
+        boolean is_active true
+    }
+
+    SEATS {
+        bigint id PK
+        bigint layout_id FK
+        string seat_code "A-01"
+        string deck "LOWER | UPPER"
+        string zone "STANDARD | VIP"
+        int grid_row
+        int grid_col
+    }
+```
+
+### 🔍 Lý Giải TẠI SAO (Schema Rationale):
+- **Vì sao có `VESSEL_LAYOUTS` trung gian?**: Khi tàu Superdong I đổi sơ đồ từ 275 ghế sang 300 ghế, các Booking trong quá khứ vẫn cần tham chiếu đúng sơ đồ cũ `v2025.1` để đối soát, trong khi các chuyến tương lai dùng `v2026.1`.
+
+---
+
+## 🗿 Grug Đúc Kết
+
+<Callout type="tip">
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Thuyền gỗ đóng thêm ghế thì khắc sơ đồ mới! Sơ đồ cũ giữ nguyên trên phiến đá cũ, không xóa đi mà đè chồng lên!"*
+</Callout>
