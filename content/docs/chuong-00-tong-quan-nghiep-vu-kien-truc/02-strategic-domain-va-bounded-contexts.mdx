@@ -21,40 +21,40 @@ Nếu không phân rã Bounded Contexts, logic giữ ghế, tính giá vé, than
 
 ```mermaid
 flowchart TD
-    subgraph MasterDataDomain [1. Master Data Context]
-        MD1[Locations & Ports]
-        MD2[Routes & Journeys]
-        MD3[Vessels & Layout JSON]
+    subgraph MasterDataDomain ["1. Master Data Context<br/>(Miền Dữ Liệu Nền Tảng)"]
+        MD1["Locations & Ports<br/>(Bến Tàu & Địa Điểm)"]
+        MD2["Routes & Journeys<br/>(Tuyến Đường & Hành Trình)"]
+        MD3["Vessels & Layout JSON<br/>(Tàu & Sơ Đồ Ghế)"]
     end
 
-    subgraph TripDomain [2. Trip & Fleet Context]
-        T1[Schedules & Trips]
-        T2[Trip Seat Inventories]
-        T3[Dynamic Pricing Engine]
+    subgraph TripDomain ["2. Trip & Fleet Context<br/>(Miền Chuyến Tàu & Đội Tàu)"]
+        T1["Schedules & Trips<br/>(Lịch Chạy & Chuyến Tàu)"]
+        T2["Trip Seat Inventories<br/>(Kho Ghế Theo Chuyến)"]
+        T3["Dynamic Pricing Engine<br/>(Động Cơ Tính Giá Linh Hoạt)"]
     end
 
-    subgraph BookingDomain [3. Booking & Hold Context]
-        B1[Booker & Passengers]
-        B2[MySQL Lock & DB Queue]
-        B3[Hold Token Management]
+    subgraph BookingDomain ["3. Booking & Hold Context<br/>(Miền Đặt Vé & Giữ Ghế)"]
+        B1["Booker & Passengers<br/>(Người Đặt & Danh Sách Khách)"]
+        B2["MySQL Lock & DB Queue<br/>(Khóa Ghế & Hàng Chờ Xử Lý)"]
+        B3["Hold Token Management<br/>(Quản Lý Thời Gian Giữ Ghế)"]
     end
 
-    subgraph PaymentDomain [4. Payment Context]
-        P1[Online Payment Gateway]
-        P2[Counter Cash Payment]
-        P3[Retail Invoice & VAT Export]
+    subgraph PaymentDomain ["4. Payment Context<br/>(Miền Thanh Toán)"]
+        P1["Online Payment Gateway<br/>(Cổng Thanh Toán Online)"]
+        P2["Counter Cash Payment<br/>(Thanh Toán Tiền Mặt Quầy)"]
+        P3["Retail Invoice & VAT Export<br/>(Hóa Đơn Bán Lẻ & VAT)"]
     end
 
-    subgraph CheckinDomain [5. Check-in Context]
-        C1[QR Code Generator]
-        C2[Scanner Device API]
-        C3[Group & Individual Boarding]
+    subgraph CheckinDomain ["5. Check-in Context<br/>(Miền Soát Vé Cầu Cảng)"]
+        C1["QR Code Generator<br/>(Tạo Mã QR Check-in)"]
+        C2["Scanner Device API<br/>(API Máy Quét QR)"]
+        C3["Group & Individual Boarding<br/>(Check-in Cả Đoàn hoặc Lẻ)"]
     end
 
-    subgraph OperationDomain [6. Operation & Incident Context]
-        O1[Vessel Change & Seat Reselect]
-        O2[Trip Cancellation & Delay]
-        O3[Refund & Exchange Audit]
+    subgraph OperationDomain ["6. Operation & Incident Context<br/>(Miền Vận Hành & Sự Cố)"]
+        O1["Vessel Change & Seat Reselect<br/>(Đổi Tàu & Chọn Lại Ghế)"]
+        O2["Trip Cancellation & Delay<br/>(Superdong Hủy / Đổi Giờ)"]
+        O3["Refund & Exchange Audit<br/>(Hoàn / Đổi Vé & Đối Soát)"]
     end
 
     MasterDataDomain --> TripDomain
