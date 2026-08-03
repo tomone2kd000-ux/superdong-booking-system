@@ -87,25 +87,25 @@ Hệ thống phục vụ 5 nhóm tác nhân chính với phạm vi quyền hạn
 ```mermaid
 erDiagram
     USERS ||--o| BOOKINGS : creates
-    STATIONS ||--|{ USERS : scopes
-    STATIONS ||--|{ TRIPS : departs_from
+    LOCATIONS ||--|{ USERS : scopes
+    LOCATIONS ||--|{ TRIPS : departs_from
 
     USERS {
         bigint id PK
         string email
         string role "GUEST | ACCOUNT | STAFF | CHECKER | MANAGER"
-        bigint station_id FK "Null for Guest/Account"
+        bigint location_id FK "Null for Guest/Account"
     }
 
-    STATIONS {
+    LOCATIONS {
         bigint id PK
-        string station_code UK
-        string name
+        string code UK "RG | HT | PQ"
+        string name "Bến Rạch Giá"
     }
 ```
 
 ### 🔍 Lý Giải TẠI SAO (Schema Rationale):
-- **Vì sao `USERS` có `station_id` (FK)?**: Nhân viên phòng vé (`STAFF`) tại Bến Rạch Giá không được phép bán vé hay chỉnh sửa chuyến của Bến Hà Tiên. Phân quyền RBAC gắn chặt với `station_id`.
+- **Vì sao `USERS` có `location_id` (FK)?**: Nhân viên phòng vé (`STAFF`) tại Bến Rạch Giá (`location_id`) không được phép bán vé hay chỉnh sửa chuyến của Bến Hà Tiên. Phân quyền RBAC gắn chặt với Bến tàu (`location_id`).
 - **Vì sao `GUEST` không cần tạo Account?**: Để giảm tối đa ma sát checkout (DEC-029). Hệ thống tự sinh `guest_session` và mã bảo mật tra cứu qua Email/SMS.
 
 ---
