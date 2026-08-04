@@ -44,7 +44,7 @@ erDiagram
 ```
 
 ### 🔍 Lý Giải TẠI SAO (Schema Rationale):
-- **Vì sao ghi `OUTBOX_MESSAGES` vào DB thay vì bắn thẳng vào Queue?**: Nếu DB commit thành công nhưng Queue broker (Redis/RabbitMQ) bị sập, tin nhắn sẽ bị mất. Lưu vào bảng DB `OUTBOX_MESSAGES` cùng Transaction đảm bảo tính toàn vẹn 100% (Guaranteed Delivery).
+- **Vì sao ghi `OUTBOX_MESSAGES` vào DB thay vì bắn thẳng vào Queue?**: Nếu DB commit thành công nhưng Queue Worker bị gián đoạn, tin nhắn sẽ không bị mất. Lưu vào bảng DB `OUTBOX_MESSAGES` cùng Transaction đảm bảo tính toàn vẹn 100% (Guaranteed Delivery).
 
 ---
 
