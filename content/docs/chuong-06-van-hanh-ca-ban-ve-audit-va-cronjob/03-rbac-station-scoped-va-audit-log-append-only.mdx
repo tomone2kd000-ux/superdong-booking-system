@@ -68,8 +68,8 @@ erDiagram
         string action "BOOKING_CANCELLED | CHECKIN_OVERRIDDEN"
         string auditable_type "Booking"
         bigint auditable_id
-        jsonb payload_before
-        jsonb payload_after
+        json payload_before
+        json payload_after
         string override_reason "Khách đi trễ do sự cố xe"
         timestamp created_at "Only INSERT allowed"
     }

@@ -1,66 +1,59 @@
 ---
-title: "03. Khách Chủ Động Đổi/Hủy Vé & Chính Sách Phí (DEC-014, DEC-015, DEC-032, DEC-033)"
-description: "Luồng khách tự đổi/hủy vé trực tuyến hoặc tại quầy, ma trận khấu trừ phí phạt (DEC-032) và quy tắc vé dùng 1 phần (DEC-033)"
+title: "03. Khách Chủ Động Đổi / Hủy Vé & Phí Phạt (DEC-032, DEC-033)"
+description: "Quy trình xử lý khi khách hàng chủ động yêu cầu đổi hoặc hủy vé và chính sách phí phạt linh hoạt theo cấu hình"
 ---
 
-# Khách Chủ Động Đổi/Hủy Vé & Chính Sách Phí
+# Khách Chủ Động Đổi / Hủy Vé & Phí Phạt (DEC-032, DEC-033)
 
-Khi hành khách có thay đổi lịch trình cá nhân và chủ động yêu cầu Đổi hoặc Hủy vé.
-
----
-
-## 🎯 Bài Toán Nghiệp Vụ & Quyết Định Nổi Bật
-
-1. **3 Kênh Đổi Chuyến (DEC-015, DEC-016)**: Hệ thống hỗ trợ 3 kênh đổi chuyến: Đổi tại Quầy/Hotline, Gửi yêu cầu trên Web để Staff duyệt, hoặc Khách tự đổi trực tuyến. Các kênh này được bật/tắt linh hoạt bằng cấu hình.
-2. **Chính Sách Khấu Trừ Phí Hủy Vé (DEC-032)**: Phí hủy vé được tính dynamic theo mốc thời gian trước giờ tàu chạy:
-   - Hủy trước 24h: Phạt 10% giá vé.
-   - Hủy từ 2h đến 24h: Phạt 20% giá vé.
-   - Hủy dưới 2h hoặc sau khi tàu chạy: Phạt 100% (Không hoàn tiền).
-3. **Vé Đã Sử Dụng Một Phần (DEC-033)**: Đơn vé khứ hồi đã đi chiều đi (Partially used) -> **KHÔNG tự động hoàn tiền trực tuyến**. Staff tại quầy xem xét và quyết định thủ công từng trường hợp.
+Hệ thống cung cấp cơ chế xử lý khi khách hàng chủ động hủy hoặc đổi chuyến đi theo cấu hình chính sách của Superdong.
 
 ---
 
-## 💡 Giải Pháp Kiến Trúc Backend
+## 🎯 Bài Toán Nghiệp Vụ & Quyết Định (DEC-032, DEC-033)
 
-![Grug Customer Cancel Fee](/images/grug_customer_cancel_fee.jpeg)
-
-Fare Engine tính toán tiền hoàn:
-
-$$Tiền\ Hoàn\ Trả = Tổng\ Tiền\ Vé - (Giá\ Vé \times \%\ Phí\ Phạt) - Phí\ Đổi\ Vé$$
+1. **Chính Sách Hủy Vé Theo Cấu Hình (DEC-032)**:
+   - Mức phí phạt và % hoàn tiền được **quản lý linh hoạt trong Cấu hình hệ thống (`Settings`)** theo mốc thời gian trước giờ khởi hành (DEC-032). 
+   - Hệ thống hỗ trợ hoàn tiền tự động hoặc nhân viên duyệt thủ công tùy theo cấu hình bật/tắt (DEC-014).
+2. **Booking Đã Sử Dụng Một Phần (DEC-033)**:
+   - Với đơn đặt vé khứ hồi đã sử dụng 1 lượt (lượt đi), **không tự động hoàn tiền trực tuyến**. Nhân viên phòng vé/quản lý phải xem xét và quyết định thủ công cho từng trường hợp.
 
 ---
 
-## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO
+## 💡 Ví Dụ Minh Họa Cấu Hình Phí Phạt (Illustrative Example)
+
+> [!NOTE]
+> Các con số dưới đây chỉ là **Ví dụ minh họa cấu hình** trong `Settings`. Quy tắc thực tế được nạp động từ CSDL tại thời điểm xử lý request.
+
+| Mốc Thời Gian Trước Giờ Khởi Hành | Mức Phí Phạt (Ví Dụ Cấu Hình) | % Hoàn Tiền (Ví Dụ Cấu Hình) | Phương Thức Xử Lý |
+| :--- | :--- | :--- | :--- |
+| **Trước 24 giờ** | Phí cố định `X` VND | Hoàn `100% - X` | Tự động hoặc Staff duyệt (DEC-014) |
+| **Từ 2 đến 24 giờ** | Tỷ lệ `Y%` tổng giá vé | Hoàn `100% - Y%` | Tự động hoặc Staff duyệt (DEC-014) |
+| **Dưới 2 giờ** | `100%` giá vé | `0%` (Không hoàn) | Hệ thống từ chối tự động |
+
+---
+
+## 🪨 Chi Tiết Workflow Hủy Vé & Quản Lý OTP (DEC-035)
 
 ```mermaid
-erDiagram
-    CANCELLATION_POLICIES ||--|{ TICKET_CANCEL_REQUESTS : calculates
-
-    CANCELLATION_POLICIES {
-        bigint id PK
-        int hours_before_departure
-        decimal fee_percentage "10.00"
-        boolean is_active true
-    }
-
-    TICKET_CANCEL_REQUESTS {
-        bigint id PK
-        bigint booking_id FK
-        bigint ticket_id FK
-        decimal original_price
-        decimal fee_amount
-        decimal refund_amount
-        string status "PENDING_APPROVAL | APPROVED | REJECTED | AUTO_PROCESSED"
-    }
+flowchart TD
+    RequestCancel["Khách yêu cầu Hủy vé trên Web"] --> CheckGuest{"Khách Vãng Lai hay Account?"}
+    
+    CheckGuest -->|Khách Vãng Lai| SendOTP["Gửi mã OTP xác minh qua Email/SMS (DEC-035)"]
+    SendOTP --> VerifyOTP{"Xác minh OTP khớp?"}
+    VerifyOTP -->|Không| RejectOTP["Từ chối thao tác"]
+    VerifyOTP -->|Đúng OTP| CalculateRefund
+    
+    CheckGuest -->|Account| CalculateRefund["Tính toán số tiền hoàn & phí phạt từ Settings (DEC-032)"]
+    
+    CalculateRefund --> CheckUsed{"Booking đã đi 1 lượt?"}
+    CheckUsed -->|Đã đi 1 lượt| ManualReview["Chuyển Nhân viên xem xét thủ công (DEC-033)"]
+    CheckUsed -->|Chưa sử dụng| ProcessRefund["Thực hiện Hoàn tiền theo Cấu hình"]
 ```
-
-### 🔍 Lý Giải TẠI SAO (Schema Rationale):
-- **Vì sao có `status = PENDING_APPROVAL`?**: Theo DEC-014, hệ thống hỗ trợ cả chế độ Staff duyệt tay lẫn Auto-process. Đơn vé có giá trị lớn hoặc vé đoàn sẽ chuyển sang `PENDING_APPROVAL` để Quản lý duyệt trước khi nhả tiền.
 
 ---
 
 ## 🗿 Grug Đúc Kết
 
 <Callout type="tip">
-  **🗿 Grug Kiến Trúc Mách Bảo**: *"Trả vé sớm trước 1 ngày thì phạt 10 sò! Trả sát giờ thuyền chạy thì mất sạch tiền! Vé đã đi 1 chiều thì ra quầy gặp tù trưởng!"*
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Luật phạt đổi hủy vé nằm trong rương Cấu Hình Settings! Máy tự đọc mốc giờ rồi tính tiền hoàn, không ai được tự ghi đè con số!"*
 </Callout>

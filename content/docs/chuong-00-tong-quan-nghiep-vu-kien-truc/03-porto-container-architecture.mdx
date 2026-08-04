@@ -1,74 +1,98 @@
 ---
-title: "03. Porto Container Architecture"
-description: "Cấu trúc thư mục mã nguồn Porto Pattern giúp phân rã logic và tổ chức codebase Superdong Backend"
+title: "03. Porto Container Architecture & Action-Task Rules"
+description: "Quy tắc thiết kế Porto Pattern: Controller -> Action -> Main Task -> Child Tasks -> Repository"
 ---
 
-# Porto Container Architecture
+# Porto Container Architecture & Action-Task Rules
 
-Dự án **`E:\cty\superdong-be`** áp dụng **Kiến trúc Porto (Porto Container Architecture)**. Porto chia mã nguồn thành 2 lớp chính: **Containers** (Chứa logic nghiệp vụ từng miền) và **Ship** (Chứa hạ tầng dùng chung).
-
----
-
-## 🎯 Bài Toán Tổ Chức Mã Nguồn (Code Organization)
-
-Trong các dự án MVC truyền thống, `BookingController` thường trở thành "Fat Controller" dài 3,000 dòng code, chứa cả logic giữ ghế, gửi mail, tính giá và gọi VNPAY. Kiến trúc Porto giải quyết triệt để vấn đề này nhờ quy tắc **Single Task (Tác vụ đơn lẻ)**.
+Dự án Superdong tuân thủ nghiêm ngặt **Quy tắc thiết kế Porto Container Architecture** (AGENTS.md:33-34) để đảm bảo tính phân rã, dễ kiểm thử và không vi phạm Architecture Tests.
 
 ---
 
-## 💡 Cấu Trúc Mã Nguồn Porto Pattern Trong Superdong
+## 🎯 Quy Tắc Cốt Lõi Porto Pattern
+
+```
+ ┌────────────────────────────────────────────────────────┐
+ │ 1. UI / API Controller                                 │
+ │    - Tiếp nhận HTTP Request, Validate DTO               │
+ └───────────────────────────┬────────────────────────────┘
+                             │
+                             ▼
+ ┌────────────────────────────────────────────────────────┐
+ │ 2. Action (Đúng 1 Main Task)                           │
+ │    - Gọi ĐÚNG 1 Main Task duy nhất                     │
+ │    - KHÔNG mở Transaction, KHÔNG orchestration         │
+ └───────────────────────────┬────────────────────────────┘
+                             │
+                             ▼
+ ┌────────────────────────────────────────────────────────┐
+ │ 3. Main Task (Orchestrator & Transaction Boundary)     │
+ │    - Mở DB Transaction, điều phối các Child Tasks      │
+ └─────────────┬────────────────────────────┬─────────────┘
+               │                            │
+               ▼                            ▼
+ ┌──────────────────────────┐  ┌──────────────────────────┐
+ │ 4a. Child Task 1         │  │ 4b. Child Task 2         │
+ │ (Validate / Lock)        │  │ (Create Record / Event)  │
+ └─────────────┬────────────┘  └────────────┬─────────────┘
+               │                            │
+               ▼                            ▼
+ ┌────────────────────────────────────────────────────────┐
+ │ 5. Repositories / Eloquent Models                      │
+ └────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 💡 Phân Định Trách Nhiệm Trong Porto Pattern
 
 ![Grug Porto Single Task](/images/grug_porto_single_task.jpeg)
 
-```text
-app/
-├── Containers/
-│   ├── AppSection/
-│   │   ├── Booking/           <-- Container Đặt vé & Giữ ghế
-│   │   │   ├── Actions/       <-- Orchestrator (Điều phối luồng)
-│   │   │   ├── Tasks/         <-- Single Action (Nhiệm vụ đơn lẻ)
-│   │   │   ├── Models/        <-- Eloquent Models (Booking, BookingLeg)
-│   │   │   ├── UI/WEB/        <-- Web Controllers & Requests
-│   │   │   └── UI/API/        <-- API Controllers & Resources
-│   │   ├── Payment/           <-- Container Thanh toán VNPAY/MoMo
-│   │   ├── Fleet/             <-- Container Quản lý Tàu & Sơ đồ ghế
-│   │   └── Checkin/           <-- Container QR Code & Soát vé
-└── Ship/                      <-- Lớp hạ tầng trung tâm
-    ├── Parents/               <-- Base Classes (Actions, Tasks, Models)
-    └── Exceptions/            <-- Exception Handler tập trung
-```
-
-### ⚡ Phân Định Vai Trò: Action vs Task
-
-| Thành phần Porto | Vai Trò & Nhiệm Vụ | Quy Tắc Lập Trình |
-| :--- | :--- | :--- |
-| **Action** | **Bộ Điều Phối (Orchestrator)**: Nhận DTO từ Controller, gọi nhiều Tasks theo thứ tự để hoàn thành 1 Use Case. | Không chứa SQL Query trực tiếp. Gọi 2-5 Tasks nhỏ. |
-| **Task** | **Nhiệm Vụ Đơn Lẻ (Single Operation)**: Thực hiện đúng 1 việc duy nhất (ví dụ: `HoldSeatTask`, `CalculateQuoteTask`). | Reusable 100%. Không gọi Action khác. |
-| **DataTransfers (DTO)** | **Đối Tượng Truyền Dữ Liệu**: Đóng gói payload từ Controller chuyển cho Action. | Strongly-typed, Immutable. |
+1. **Controller**:
+   - Gọi `CreateBookingDTO::fromRequest($request)`.
+   - Chuyển DTO cho Action xử lý và trả về `JsonResponse`.
+2. **Action (Ví dụ: `CreateBookingAction`)**:
+   - **Quy tắc bắt buộc**: Action CHỈ GỌI ĐÚNG 1 Main Task (`ProcessBookingHoldMainTask`).
+   - Action KHÔNG chứa logic nghiệp vụ, KHÔNG gọi trực tiếp Repository, KHÔNG tự mở `DB::transaction()`.
+3. **Main Task (Ví dụ: `ProcessBookingHoldMainTask`)**:
+   - Là nơi quản lý Ranh giới Giao dịch (`DB::transaction()`).
+   - Điều phối thứ tự thực thi của các Child Tasks:
+     - `ValidateSeatAvailabilityTask`: Kiểm tra ghế khả dụng.
+     - `LockSeatInventoryTask`: Thực hiện MySQL `lockForUpdate`.
+     - `CreateBookingRecordTask`: Tạo bản ghi Booking.
+     - `DispatchBookingCreatedEventTask`: Ghi nhận sự kiện nghiệp vụ.
 
 ---
 
-## 🪨 Luồng Xử Lý Mã Nguồn: Đặt Vé & Giữ Ghế
+## 🪨 Luồng Thực Thi Chi Tiết (Sequence Diagram)
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Client as Client / Mobile App
     participant Ctrl as BookingAPIController
     participant Act as CreateBookingAction
-    participant T1 as ValidateSeatHoldTask
-    participant T2 as LockSeatDatabaseTask
-    participant T3 as CreateBookingRecordTask
-    participant Event as BookingCreatedEvent
+    participant MainT as ProcessBookingHoldMainTask (Main)
+    participant SubT1 as ValidateSeatAvailabilityTask
+    participant SubT2 as LockSeatInventoryTask
+    participant SubT3 as CreateBookingRecordTask
+    participant Repo as BookingRepository
 
-    Client->>Ctrl: POST /api/v1/bookings/hold-seats
     Ctrl->>Act: run(CreateBookingDTO)
-    Act->>T1: run(seat_ids, trip_id)
-    T1-->>Act: Seat Available
-    Act->>T2: run(seat_ids) [MySQL lockForUpdate]
-    T2-->>Act: Lock Acquired
-    Act->>T3: run(DTO)
-    T3-->>Act: Booking Entity
-    Act->>Event: dispatch(BookingCreatedEvent)
+    Act->>MainT: run(CreateBookingDTO) [ĐÚNG 1 Main Task]
+    
+    rect rgb(240, 240, 240)
+        note over MainT: DB::transaction Boundary
+        MainT->>SubT1: run(seat_ids, trip_id)
+        SubT1-->>MainT: OK
+        MainT->>SubT2: run(seat_ids) [MySQL lockForUpdate]
+        SubT2-->>MainT: Locked
+        MainT->>SubT3: run(DTO)
+        SubT3->>Repo: create(data)
+        Repo-->>SubT3: Booking Entity
+        SubT3-->>MainT: Booking Entity
+    end
+    
+    MainT-->>Act: Booking Entity
     Act-->>Ctrl: Booking Entity
     Ctrl-->>Client: 201 Created (JSON Response)
 ```
@@ -78,5 +102,5 @@ sequenceDiagram
 ## 🗿 Grug Đúc Kết
 
 <Callout type="tip">
-  **🗿 Grug Kiến Trúc Mách Bảo**: *"Tù trưởng Action chỉ đứng chỉ tay phân việc! Rìu đá Task nào lo chặt cây Task đó, không giẫm chân lên nhau!"*
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Một Action chỉ được trao niềm tin cho ĐÚNG MỘT Main Task! Main Task là thuyền trưởng tự mở rương DB Transaction và sai bảo các con thuyền nhỏ!"*
 </Callout>

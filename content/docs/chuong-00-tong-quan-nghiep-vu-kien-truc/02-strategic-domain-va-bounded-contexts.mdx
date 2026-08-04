@@ -1,57 +1,54 @@
 ---
-title: "02. Strategic Domain & Bounded Contexts"
-description: "Bản đồ ranh giới nghiệp vụ và Phân định Tác nhân (Actor Mapping) theo Spatie RBAC Package"
+title: "02. Candidate Bounded Contexts & Container Mapping"
+description: "Bản đồ đề xuất Ranh giới nghiệp vụ (Candidate Context Proposals) và Phân định Tác nhân theo Spatie RBAC Package"
 ---
 
-# Strategic Domain & Bounded Contexts
+# Candidate Bounded Contexts & Container Mapping
 
-Để tránh codebase rơi vào **Thảm họa Spaghetti code (Big ball of mud)**, hệ thống Superdong được chia thành 6 **Ranh giới nghiệp vụ độc lập (Bounded Contexts)**. Mỗi Bounded Context quản lý một miền dữ liệu khép kín.
+Để quản lý độ phức tạp của hệ thống Superdong, kiến trúc đề xuất chia miền nghiệp vụ thành các **Candidate Bounded Context Proposals** (docs/nghiepvu.md:401-422). 
 
----
-
-## 🎯 Bài Toán Ranh Giới Nghiệp Vụ
-
-Nếu không phân rã Bounded Contexts, logic giữ ghế, tính giá vé, thanh toán và soát vé QR sẽ dính chặt vào nhau. Một thay đổi ở luồng soát vé bến tàu có thể làm sập luồng đặt vé online Tết!
+> [!NOTE]
+> **Lưu ý Kiến Trúc**: Phân loại Strategic Domain hiện tại ở trạng thái `BLOCKED_FOR_FINAL_STRATEGIC_CLASSIFICATION` (docs/nghiepvu.md:786). Trong triển khai thực tế của Porto Container Architecture, mã nguồn hiện được tổ chức thành 2 Container nghiệp vụ chính là **`AppSection`** (Hạ tầng, Auth, User, Location) và **`BookingSection`** (Đặt vé, Khóa ghế, Thanh toán, Vé điện tử).
 
 ---
 
-## 💡 Phân Rã 6 Bounded Contexts Cốt Lõi
+## 💡 Bản Đồ Minh Họa 6 Candidate Bounded Contexts (Proposals)
 
 ![Grug Bounded Contexts](/images/grug_bounded_contexts.jpeg)
 
 ```mermaid
 flowchart TD
-    subgraph MasterDataDomain ["1. Master Data Context<br/>(Miền Dữ Liệu Nền Tảng)"]
+    subgraph MasterDataDomain ["1. Master Data Context (Proposal)<br/>(Miền Dữ Liệu Nền Tảng)"]
         MD1["Locations & Ports<br/>(Bến Tàu & Địa Điểm)"]
         MD2["Routes & Journeys<br/>(Tuyến Đường & Hành Trình)"]
         MD3["Vessels & Layout JSON<br/>(Tàu & Sơ Đồ Ghế)"]
     end
 
-    subgraph TripDomain ["2. Trip & Fleet Context<br/>(Miền Chuyến Tàu & Đội Tàu)"]
+    subgraph TripDomain ["2. Trip & Fleet Context (Proposal)<br/>(Miền Chuyến Tàu & Đội Tàu)"]
         T1["Schedules & Trips<br/>(Lịch Chạy & Chuyến Tàu)"]
         T2["Trip Seat Inventories<br/>(Kho Ghế Theo Chuyến)"]
         T3["Dynamic Pricing Engine<br/>(Động Cơ Tính Giá Linh Hoạt)"]
     end
 
-    subgraph BookingDomain ["3. Booking & Hold Context<br/>(Miền Đặt Vé & Giữ Ghế)"]
+    subgraph BookingDomain ["3. Booking & Hold Context (Proposal)<br/>(Miền Đặt Vé & Giữ Ghế)"]
         B1["Booker & Passengers<br/>(Người Đặt & Danh Sách Khách)"]
         B2["MySQL Lock & DB Queue<br/>(Khóa Ghế & Hàng Chờ Xử Lý)"]
         B3["Hold Token Management<br/>(Quản Lý Thời Gian Giữ Ghế)"]
     end
 
-    subgraph PaymentDomain ["4. Payment Context<br/>(Miền Thanh Toán)"]
+    subgraph PaymentDomain ["4. Payment Context (Proposal)<br/>(Miền Thanh Toán)"]
         P1["Online Payment Gateway<br/>(Cổng Thanh Toán Online)"]
         P2["Counter Cash Payment<br/>(Thanh Toán Tiền Mặt Quầy)"]
         P3["Retail Invoice & VAT Export<br/>(Hóa Đơn Bán Lẻ & VAT)"]
     end
 
-    subgraph CheckinDomain ["5. Check-in Context<br/>(Miền Soát Vé Cầu Cảng)"]
+    subgraph CheckinDomain ["5. Check-in Context (Proposal)<br/>(Miền Soát Vé Cầu Cảng)"]
         C1["QR Code Generator<br/>(Tạo Mã QR Check-in)"]
         C2["Scanner Device API<br/>(API Máy Quét QR)"]
         C3["Group & Individual Boarding<br/>(Check-in Cả Đoàn hoặc Lẻ)"]
     end
 
-    subgraph OperationDomain ["6. Operation & Incident Context<br/>(Miền Vận Hành & Sự Cố)"]
+    subgraph OperationDomain ["6. Operation & Incident Context (Proposal)<br/>(Miền Vận Hành & Sự Cố)"]
         O1["Vessel Change & Seat Reselect<br/>(Đổi Tàu & Chọn Lại Ghế)"]
         O2["Trip Cancellation & Delay<br/>(Superdong Hủy / Đổi Giờ)"]
         O3["Refund & Exchange Audit<br/>(Hoàn / Đổi Vé & Đối Soát)"]
@@ -66,19 +63,19 @@ flowchart TD
 
 ---
 
-## 👥 Phân Định Actor Nghiệp Vụ & Spatie RBAC Mapping
+## 👥 Phân Định Actor Nghiệp Vụ & Spatie Global RBAC
 
 ![Grug Actor Matrix](/images/grug_actor_matrix.jpeg)
 
-🚨 **LƯU Ý KIẾN TRÚC QUAN TRỌNG**: "Actor Nghiệp Vụ" trong tài liệu **KHÔNG ĐỒNG NGHĨA với một giá trị cột enum `users.role`**. Dự án `E:\cty\superdong-be` **dùng package `Spatie\Permission`** với các bảng `roles`, `permissions`, `model_has_roles`. Bảng `users` tuyệt đối KHÔNG có cột `role` hay `roles`.
+🚨 **LƯU Ý QUAN TRỌNG**: "Actor Nghiệp Vụ" trong tài liệu **KHÔNG ĐỒNG NGHĨA với cột enum `users.role`**. Mã nguồn dự án `E:\cty\superdong-be` **sử dụng Global RBAC từ Package `Spatie\Permission`** với 6 bảng: `users`, `roles`, `permissions`, `model_has_roles`, `role_has_permissions`, `model_has_permissions`. Bảng `users` không chứa cột `role`.
 
-### 📌 Ma Trận Mapping Chuẩn Giữa Nghiệp Vụ & Mã Nguồn Backend
+### 📌 Ma Trận Mapping Chuẩn Giữa Khái Niệm Nghiệp Vụ & Codebase
 
 | Khái Niệm Actor | Cách Biểu Diễn Kỹ Thuật Trong Database & Codebase | Quyền Hạn & Giới Hạn An Toàn |
 | :--- | :--- | :--- |
 | **Khách Vãng Lai (GUEST)** | **Không có bản ghi `users`**. Bản ghi `BOOKING` có `user_id = NULL`. | Đặt vé không cần tài khoản (DEC-026). Thao tác nhạy cảm bằng link bảo mật + OTP (DEC-035). |
 | **Khách Tài Khoản (ACCOUNT)** | **User đã đăng ký/đăng nhập** (`user_id != NULL`). Không phải 1 role Spatie. | Xem & quản lý lịch sử Booking do chính mình tạo (DEC-028, DEC-040). |
-| **Nhân Viên Quầy** | Spatie Role: **`counter_staff`** (gán qua `model_has_roles`). | Bán vé tại quầy, thu tiền mặt, in vé. Gắn `location_id` để giới hạn bến (DEC-034). |
+| **Nhân Viên Quầy** | Spatie Role: **`counter_staff`** (gán qua `model_has_roles`). | Bán vé tại quầy, thu tiền mặt, in vé tại quầy (DEC-006, DEC-008). |
 | **Nhân Viên Vận Hành** | Spatie Role: **`operations_staff`** (gán qua `model_has_roles`). | Đổi tàu khác sơ đồ, dời giờ chạy, xử lý chuyến bão hủy (DEC-002, DEC-011). |
 | **Soát Vé Cầu Cảng** | Spatie Role: **`checkin_staff`** (gán qua `model_has_roles`). | Quét QR Code check-in. Cấm Check-in Offline trong MVP (DEC-037). |
 | **Quản Lý Vận Hành** | Spatie Role: **`manager`** (gán qua `model_has_roles`). | Quyền cao cấp: Override hoàn tiền, sửa check-in nhầm (DEC-034, DEC-036). |
@@ -91,18 +88,17 @@ flowchart TD
 ```mermaid
 erDiagram
     USERS ||--o| BOOKINGS : "user_id (NULL if GUEST)"
-    LOCATIONS ||--|{ USERS : "location_id (NULL for GUEST/ACCOUNT)"
     USERS ||--|{ MODEL_HAS_ROLES : has
     ROLES ||--|{ MODEL_HAS_ROLES : assigned_to
     ROLES ||--|{ ROLE_HAS_PERMISSIONS : contains
     PERMISSIONS ||--|{ ROLE_HAS_PERMISSIONS : granted_in
+    USERS ||--|{ MODEL_HAS_PERMISSIONS : granted_directly
 
     USERS {
         bigint id PK
         string name
         string email UK
         string phone
-        bigint location_id FK "Gắn với Bến tàu cho Staff/Checker"
     }
 
     ROLES {
@@ -125,13 +121,13 @@ erDiagram
 ```
 
 ### 🔍 Lý Giải TẠI SAO (Schema Rationale):
-- **Vì sao `GUEST` có `user_id = NULL` trong `BOOKINGS`?**: Để giảm tối đa ma sát checkout (DEC-029). Hệ thống không ép tạo User rác trong DB, tiết kiệm tài nguyên và đơn giản hóa truy vấn.
-- **Vì sao dùng Spatie RBAC thay vì Cột Enum `role`?**: Giúp mở rộng quyền động (`permissions`) linh hoạt. Khi cần cấp riêng quyền `refund.approve` cho một nhân viên quầy lâu năm, ta gán trực tiếp qua `model_has_permissions` mà không cần sửa cấu trúc DB!
+- **Vì sao `GUEST` có `user_id = NULL` trong `BOOKINGS`?**: Để giảm tối đa ma sát checkout (DEC-029). Hệ thống không tạo User rác trong DB.
+- **Vì sao dùng Spatie RBAC thay vì Cột Enum `role`?**: Giúp linh hoạt gán thêm quyền đặc biệt (`permissions`) cho từng tài khoản mà không cần thay đổi cấu trúc DB.
 
 ---
 
 ## 🗿 Grug Đúc Kết
 
 <Callout type="tip">
-  **🗿 Grug Kiến Trúc Mách Bảo**: *"Khách vãng lai (Guest) không có tên trên sổ bộ tộc (user_id = NULL)! Nhân viên (Staff) có huy hiệu thẻ Spatie `counter_staff` đeo trên cổ!"*
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Khách vãng lai (Guest) không cần sổ bộ tộc (user_id = NULL)! Nhân viên (Staff) có thẻ Spatie `counter_staff` xác nhận quyền hạn!"*
 </Callout>

@@ -1,91 +1,56 @@
 ---
-title: "01. Bức Tranh Tổng Quan & 6 Màn Hình Figma UI"
-description: "Phân tích bản chất nghiệp vụ Superdong Booking System và luồng dữ liệu 6 bước trên Figma UI"
+title: "01. Bức Tranh Tổng Quan & 9 Màn Hình Figma UI"
+description: "Phân tích 9 màn hình Figma UI reviewed và luồng trải nghiệm khách hàng (User Journey) hệ thống Superdong"
 ---
 
-# Bức Tranh Tổng Quan Nghiệp Vụ Superdong
+# Bức Tranh Tổng Quan & 9 Màn Hình Figma UI
 
-Hệ thống đặt vé tàu biển **Superdong** không phải là trang thương mại điện tử bán hàng hóa thông thường. Mỗi vé bán ra đại diện cho một **chỗ ngồi vật lý trên tàu biển**, tuân thủ luật hàng hải (Cảng vụ) và chịu tác động trực tiếp từ thời tiết, sóng gió.
-
----
-
-## 🎯 Bài Toán Nghiệp Vụ Thực Tế
-
-1. **Chống Bán Trùng Ghế (Zero Double Booking)**: 500 khách cùng đổ xô mua vé chuyến 8h00 sáng ngày mùng 1 Tết. Hệ thống phải đảm bảo ghế A12 chỉ thuộc về đúng 1 người.
-2. **Luồng Thanh Toán Đa Dạng**: Hỗ trợ Thanh toán Online (khóa ghế 15 phút) và Thanh toán tại Quầy (khóa ghế đến `departure_time - X phút`, ban đầu chỉ cấp Booking Code chưa thanh toán, thu tiền xong mới phát hành Vé & QR).
-3. **Biến Cố Hàng Hải**: Tàu lớn hỏng hóc phải đổi sang tàu nhỏ có sơ đồ ghế khác hoàn toàn; tàu bị hoãn/hủy do bão.
+Tài liệu phân tích luồng nghiệp vụ dựa trên **9 màn hình Figma UI đã được review trong hồ sơ gốc** (docs/nghiepvu.md:838).
 
 ---
 
-## 💡 Phân Tích Luồng 6 Màn Hình Figma UI (User Journey)
+## 🎯 Luồng Trải Nghiệm Khách Hàng (User Journey)
 
 ![Grug Figma Journey](/images/grug_figma_journey.jpeg)
 
-Luồng đặt vé trên giao diện web/app trải qua đúng 6 bước tương ứng với 6 màn hình thiết kế:
+Luồng di chuyển chính của người dùng trải dài qua 9 màn hình giao diện công khai và quản trị:
 
-| Bước | Màn hình Figma | Thao tác Người Dùng (User) | Logic & API Backend Xử Lý (`E:\cty\superdong-be`) |
+| STT | Màn Hình Figma UI | Mô Tả Trải Nghiệm Khách Hàng | Endpoint & Hành Vi Backend |
 | :--- | :--- | :--- | :--- |
-| **1** | **Trang Chủ (Search)** | Chọn Bến đi, Bến đến, Loại vé (1 chiều / Khứ hồi), Ngày đi, Ngày về, Số lượng khách (Người lớn, Trẻ em, Em bé...). | `POST /api/v1/search-trips` -> Tìm Hành trình (Journey), truy vấn các Chuyến (`Trips`) thỏa mãn lịch chạy và tính toán ghế trống khả dụng. |
-| **2** | **Chọn Chuyến Tàu** | Xem danh sách chuyến, giờ chạy, tên tàu, số ghế còn trống theo từng hạng (Phổ thông, VIP) và bảng giá. | `GET /api/v1/trips/{id}/availability` -> Trả về danh sách chuyến + Giá vé tạm tính (Quote) dựa theo Nhóm hành khách. |
-| **3** | **Thông Tin Booker & Passenger** | Nhập thông tin Người đặt vé (Booker: Email, SĐT) và danh sách Hành khách (Passenger: Họ tên, Ngày sinh/CCCD). | `POST /api/v1/bookings/draft` -> Tạo bản nháp Booking, kiểm tra loại khách vãng lai (Guest - gửi link tra cứu + OTP) hay Khách tài khoản (Account). |
-| **4** | **Sơ Đồ Chọn Ghế (Seat Map)** | Trực quan hóa tầng (Deck), khoang (Zone) tàu. Khách bấm chọn vị trí ghế cụ thể cho từng lượt. | `POST /api/v1/bookings/{id}/hold-seats` -> Kích hoạt **MySQL Lock (`DB::transaction` & `lockForUpdate`)** để giữ ghế chống bán trùng, cập nhật `held_seats` trong 15 phút. |
-| **5** | **Thanh Toán (Checkout)** | Nhập mã Coupon, chọn xuất Hóa đơn bán lẻ, chọn phương thức (Online qua VNPAY/MoMo hoặc Tại quầy). | `POST /api/v1/payments/checkout` -> Nếu Online: redirect sang Gateway; Nếu Quầy: tạo Booking Code trạng thái `UNPAID` (chưa có vé/QR). |
-| **6** | **Xác Nhận & E-Ticket** | Nhận kết quả Đặt vé thành công, xem mã Booking Code, Danh sách ghế và Mã QR Check-in. | `GET /api/v1/bookings/{id}/ticket-summary` -> Phát hành Vé điện tử (`Ticket`) & Mã QR hợp lệ sau khi xác nhận tiền đã thu (`PAID`). |
-
-![Grug Seat Map Selection](/images/grug_seat_map_selection.jpeg)
+| **1** | **Trang Chủ (Search)** | Chọn Bến đi, Bến đến, Loại vé (1 chiều / Khứ hồi), Ngày đi, Ngày về, Số lượng khách. | `POST /api/v1/search-trips` -> Tìm Hành trình (Journey), truy vấn các Chuyến (`Trips`) và kiểm tra kho ghế khả dụng. |
+| **2** | **Danh Sách Chuyến Tàu** | Xem danh sách chuyến, giờ chạy, tên tàu, số ghế còn trống và bảng giá theo từng hạng. | `GET /api/v1/trips/{id}/availability` -> Trả về danh sách chuyến + Bảng giá tính dynamic qua `PricingTask`. |
+| **3** | **Thông Tin Booker & Passenger** | Nhập thông tin Người đặt vé (Booker) và danh sách Hành khách (Passenger). | `POST /api/v1/bookings/draft` -> Tạo bản nháp Booking. Nếu Guest: chuẩn bị luồng xác minh OTP (DEC-035). |
+| **4** | **Sơ Đồ Chọn Ghế (Seat Map)** | Trực quan hóa tầng (Deck), khoang (Zone) tàu. Bấm chọn vị trí ghế cụ thể. | `POST /api/v1/bookings/{id}/hold-seats` -> Kích hoạt MySQL Lock (`lockForUpdate`), giữ ghế với thời hạn lấy từ Cấu hình `Settings` (DEC-010). |
+| **5** | **Thanh Toán (Checkout)** | Nhập mã Coupon, chọn yêu cầu xuất Hóa đơn bán lẻ (nếu cần), chọn phương thức (Online qua Gateway hoặc Quầy). | `POST /api/v1/payments/checkout` -> Nếu Online: khởi tạo `PAYMENT_ATTEMPT`; Nếu Quầy: sinh Booking Code `UNPAID` (DEC-006). |
+| **6** | **Xác Nhận & Vé Điện Tử** | Nhận kết quả Đặt vé, mã Booking Code, Danh sách ghế và Mã QR Check-in. | `GET /api/v1/bookings/{id}/ticket-summary` -> Phát hành Vé điện tử (`Ticket`) sau khi Payment thành công (`PAID`). |
+| **7** | **Tra Cứu Đơn Hàng (Guest Portal)** | Khách vãng lai nhập Booking Code + Email/SĐT để xem thông tin vé. | `POST /api/v1/guest/verify-otp` -> Xác minh OTP gửi qua SMS/Email trước khi cho xem/đổi thông tin (DEC-035). |
+| **8** | **Quản Lý Phòng Vé (Counter POS)** | Nhân viên quầy tìm đơn `UNPAID`, thu tiền mặt, ấn xác nhận phát hành vé. | `POST /api/v1/counter/bookings/{id}/pay` -> Đổi trạng thái `PAID` và phát hành vé in tại quầy (DEC-008). |
+| **9** | **Soát Vé Cầu Cảng (Checker App)** | Soát vé dùng máy quét quét mã QR hành khách tại cầu cảng. | `POST /api/v1/checkin/scan` -> Kiểm tra mã QR hợp lệ, ghi nhận trạng thái Boarded (DEC-022, DEC-037). |
 
 ---
 
-## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO Cần Tách Biệt Dữ Liệu
-
-Toàn bộ luồng 6 màn hình trên được vận hành bởi 4 bảng dữ liệu cốt lõi bên dưới DB:
+## 🪨 Chi Tiết Luồng Tổng Thể
 
 ```mermaid
-erDiagram
-    BOOKINGS ||--|{ BOOKING_LEGS : contains
-    BOOKING_LEGS ||--|{ PASSENGERS : includes
-    PASSENGERS ||--o| TICKETS : generates
+flowchart TD
+    Search["1. Trang Chủ Search"] --> TripList["2. Danh Sách Chuyến"]
+    TripList --> CustomerInfo["3. Thông Tin Booker & Passenger"]
+    CustomerInfo --> SeatMap["4. Sơ Đồ Chọn Ghế (Seat Map)"]
+    SeatMap --> Checkout["5. Thanh Toán (Checkout)"]
     
-    BOOKINGS {
-        bigint id PK
-        string booking_code UK
-        string status "UNPAID | PAID | EXPIRED | CANCELLED"
-        string payment_method "ONLINE | COUNTER"
-        decimal grand_total
-    }
+    Checkout -->|Online Gateway| PaymentGate["Cổng Thanh Toán Online"]
+    Checkout -->|Tại Quầy| CounterPay["6. Màn Hình Quầy (POS)"]
     
-    BOOKING_LEGS {
-        bigint id PK
-        bigint booking_id FK
-        bigint trip_id FK
-        string leg_type "DEPARTURE | RETURN"
-    }
-
-    PASSENGERS {
-        bigint id PK
-        bigint booking_leg_id FK
-        string full_name
-        string passenger_type "ADULT | CHILD | INFANT"
-        string seat_code
-    }
-
-    TICKETS {
-        bigint id PK
-        bigint passenger_id FK
-        string ticket_code UK
-        string qr_signature
-        string status "ISSUED | CHECKED_IN | CANCELLED"
-    }
+    PaymentGate -->|Thành Công| Success["7. Xác Nhận & E-Ticket QR"]
+    CounterPay -->|Staff Thu Tiền| Success
+    
+    Success --> Checkin["9. Soát Vé Cầu Cảng (Checker App)"]
 ```
-
-### 🔍 Lý Giải TẠI SAO (Schema Rationale):
-- **Vì sao tách `BOOKINGS` và `BOOKING_LEGS`?**: Để hỗ trợ đặt vé **Khứ hồi** (Chuyến đi và Chuyến về) trong cùng 1 Đơn hàng `BOOKING`. Mỗi chiều chạy là 1 `BOOKING_LEG`.
-- **Vì sao `TICKETS` tách rời `PASSENGERS`?**: Đặt vé tại quầy hoặc online ban đầu chỉ tạo `BOOKING` & `PASSENGERS` ở trạng thái chưa thanh toán (`UNPAID`). **Chỉ khi tiền thực tế thu thành công**, hệ thống mới sinh bản ghi `TICKETS` kèm mã QR hợp lệ.
 
 ---
 
 ## 🗿 Grug Đúc Kết
 
 <Callout type="tip">
-  **🗿 Grug Kiến Trúc Mách Bảo**: *"Đơn hàng (Booking) chỉ là lời hứa mua vé! Tiền về tay tù trưởng thì hòn đá Mã QR mới phát sáng thành Vé (Ticket)!"*
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"9 màn hình Figma là 9 trạm dừng trên con đường đi tìm vé tàu! Màn hình nào cũng phải thông suốt thì khách mới vui vẻ lên tàu!"*
 </Callout>

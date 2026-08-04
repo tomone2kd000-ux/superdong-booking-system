@@ -36,7 +36,7 @@ erDiagram
     OUTBOX_MESSAGES {
         bigint id PK
         string event_name "BookingPaidEvent"
-        jsonb payload
+        json payload
         string status "PENDING | PUBLISHED | FAILED"
         timestamp scheduled_at
         timestamp published_at

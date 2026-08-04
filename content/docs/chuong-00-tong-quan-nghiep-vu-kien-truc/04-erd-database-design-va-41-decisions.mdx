@@ -1,141 +1,169 @@
 ---
-title: "04. ERD Database Design & 41 Architecture Decisions"
-description: "Sơ đồ ERD tổng thể toàn bộ hệ thống Superdong và danh mục 41 Quyết định Kiến trúc & Nghiệp vụ (DEC-001 đến DEC-041)"
+title: "04. Logical ERD Design & 41 Architecture Decisions"
+description: "Mô hình Logical ERD hệ thống Superdong và Bảng tổng hợp 41 Quyết định nghiệp vụ (DEC-001 đến DEC-041)"
 ---
 
-# ERD Database Design & 41 Architecture Decisions
+# Logical ERD Design & 41 Architecture Decisions
 
-Cơ sở dữ liệu của Superdong là **Nguồn chân lý duy nhất (Single Source of Truth - SSOT)** cho mọi giao dịch chuyến, giữ ghế, bán vé và doanh thu.
+Tài liệu thiết kế cơ sở dữ liệu dựa trên **Logical ERD nguồn đã phê duyệt** (docs/architecture/erd.md) và Bảng tổng hợp **41 Architecture Decisions (DEC-001 đến DEC-041)**.
 
 ---
 
-## 🪨 Sơ Đồ ERD Database Tổng Thể
+## 🎯 Sơ Đồ Logical ERD Tổng Thể
 
 ![Grug ERD Relationships](/images/grug_erd_relationships.jpeg)
 
 ```mermaid
 erDiagram
-    LOCATIONS ||--|{ ROUTES : origin
-    LOCATIONS ||--|{ ROUTES : destination
-    ROUTES ||--|{ TRIPS : scheduled_on
+    LOCATIONS ||--|{ ROUTE_STOPS : has
+    ROUTES ||--|{ ROUTE_STOPS : contains
+    ROUTES ||--|{ JOURNEYS : maps
+    JOURNEYS ||--|{ TRIPS : scheduled_on
     VESSELS ||--|{ VESSEL_LAYOUTS : has
     VESSEL_LAYOUTS ||--|{ SEATS : defines
     VESSELS ||--|{ TRIPS : operates
     TRIPS ||--|{ TRIP_SEAT_INVENTORIES : tracks
-    SEATS ||--|{ TRIP_SEAT_INVENTORIES : mapped_to
 
     BOOKINGS ||--|{ BOOKING_LEGS : contains
+    BOOKINGS ||--o| BOOKER_SNAPSHOT : captures
     TRIPS ||--|{ BOOKING_LEGS : booked_for
     BOOKING_LEGS ||--|{ PASSENGERS : includes
-    PASSENGERS ||--o| TICKETS : issues
-    BOOKINGS ||--|{ PAYMENTS : pays_with
+    
+    PASSENGERS ||--|{ SEAT_HOLDS : holds_on_leg
+    PASSENGERS ||--|{ SEAT_ASSIGNMENTS : assigned_on_leg
+    BOOKING_LEGS ||--|{ SEAT_ASSIGNMENTS : for_leg
+    PASSENGERS ||--|{ TICKETS : issues_per_leg
+    
+    BOOKINGS ||--|{ PAYMENT_ATTEMPTS : pays_with
+    PAYMENT_ATTEMPTS ||--o| MANUAL_REVIEW : flags_on_expired
 
     BOOKINGS {
         bigint id PK
         string booking_code UK
-        string status "UNPAID | PAID | EXPIRED | CANCELLED"
-        string payment_type "ONLINE | COUNTER"
+        string status "DRAFT | HELD | UNPAID | PAID | EXPIRED | CANCELLED"
+        bigint grand_total_vnd "VND nguyên - DEC-038"
         timestamp expires_at
-        decimal grand_total
     }
 
-    TRIP_SEAT_INVENTORIES {
+    BOOKER_SNAPSHOT {
         bigint id PK
+        bigint booking_id FK
+        string name
+        string email
+        string phone
+    }
+
+    BOOKING_LEGS {
+        bigint id PK
+        bigint booking_id FK
         bigint trip_id FK
+        string leg_type "DEPARTURE | RETURN"
+    }
+
+    PASSENGERS {
+        bigint id PK
+        bigint booking_leg_id FK
+        string full_name
+        string passenger_type "ADULT | CHILD | INFANT"
+    }
+
+    SEAT_ASSIGNMENTS {
+        bigint id PK
+        bigint passenger_id FK
+        bigint booking_leg_id FK
         bigint seat_id FK
-        string status "AVAILABLE | HELD | SOLD | BLOCKED"
-        timestamp held_until
-        bigint locked_by_booking_id FK
     }
 
     TICKETS {
         bigint id PK
         bigint passenger_id FK
+        bigint booking_leg_id FK
         string ticket_code UK
-        string qr_code_hash
+        bigint version_no
         string status "ISSUED | CHECKED_IN | CANCELLED"
     }
 
-    PAYMENTS {
+    PAYMENT_ATTEMPTS {
         bigint id PK
         bigint booking_id FK
-        string transaction_no
-        decimal amount
-        string status "PENDING | SUCCESS | FAILED | RECONCILE_NEEDED"
+        string gateway_code "ONLINE_GATEWAY | COUNTER_CASH"
+        bigint amount_vnd "VND nguyên - DEC-038"
+        string status "PENDING | SUCCESS | FAILED | UNKNOWN"
+    }
+
+    MANUAL_REVIEW {
+        bigint id PK
+        bigint payment_attempt_id FK
+        string reason "LATE_PAYMENT_EXPIRED | UNKNOWN_TIMEOUT"
+        string status "PENDING | RESOLVED"
     }
 ```
 
-### 🔍 Lý Giải TẠI SAO (Schema Rationale):
+---
 
-1. **Tại sao `TRIP_SEAT_INVENTORIES` tách rời `SEATS`?**:
-   - Bảng `SEATS` lưu vị trí ghế vật lý cố định trên tàu (ví dụ: Tầng 1, Khoang A, Ghế 01).
-   - Tàu chạy 10 chuyến mỗi ngày -> Cùng ghế 01 đó sẽ có 10 trạng thái riêng biệt ở 10 chuyến khác nhau. Bảng `TRIP_SEAT_INVENTORIES` đóng vai trò theo dõi trạng thái `AVAILABLE`, `HELD`, `SOLD` theo từng `trip_id`.
-2. **Tại sao `PAYMENTS` có trạng thái `RECONCILE_NEEDED`?**:
-   - Theo quyết định **DEC-030** (Anh Hiếu chốt): Nếu tiền về Gateway thành công **sau khi Booking đã bị Cronjob tự động nhả ghế (EXPIRED)**, hệ thống không tự phục hồi đơn mà đánh dấu Payment thành `RECONCILE_NEEDED` để Staff xử lý thủ công.
+## 🔍 Lý Giải TẠI SAO (Schema Rationale):
+
+1. **Vì sao tiền dùng `bigint` / VND nguyên (`grand_total_vnd`)?**:
+   - Tuân thủ **DEC-038**: Hệ thống chỉ dùng đơn vị VND, không lưu số lẻ thập phân và làm tròn tại Tổng tiền cuối cùng trong PHP Pricing Task.
+2. **Vì sao `SEAT_ASSIGNMENTS` tách theo `Passenger + Booking Leg`?**:
+   - Khách mua vé khứ hồi có thể ngồi ghế `A01` ở lượt đi nhưng ngồi ghế `B12` ở lượt về.
+3. **Vì sao dùng CSDL MySQL với kiểu dữ liệu `json`?**:
+   - CSDL chính là MySQL, lưu trữ cấu hình layout tàu và dữ liệu payload dưới dạng kiểu native `json` chuẩn của MySQL.
+4. **Vì sao không dùng Soft Delete / Hard Delete?**:
+   - Tuân thủ **DEC-039**: Dữ liệu giao dịch không dùng `SoftDeletes` hay `DELETE`. Vòng đời thực thể quản lý 100% bằng State Machine (`status`).
 
 ---
 
-## 📋 Danh Mục 41 Quyết Định Kiến Trúc & Nghiệp Vụ (DEC-001 đến DEC-041)
+## 📋 Bảng Tổng Hợp 41 Architecture Decisions (DEC-001 đến DEC-041)
 
-![Grug 41 Decisions](/images/grug_41_decisions.jpeg)
-
-### 📌 Quyết Định Từ Anh Hùng (DEC-001 đến DEC-029)
-
-| Mã DEC | Quyết Định Nghiệp Vụ | Tác Động Logic Backend |
-| :--- | :--- | :--- |
-| **DEC-001** | Backend mới làm chủ 100% Chuyến, Ghế và Đơn đặt vé. | Không phụ thuộc vào hệ thống POS cũ cho core logic. |
-| **DEC-002** | Đổi tàu làm thay đổi sơ đồ ghế -> Khách được tự chọn lại ghế trên sơ đồ mới. | Gửi notification chứa link chọn lại ghế trên sơ đồ tàu mới. |
-| **DEC-003** | Khách không chọn lại ghế đúng hạn -> Staff chọn thủ công trên sơ đồ. | Không tự động ánh xạ mã ghế cũ sang mã ghế mới. |
-| **DEC-004** | MVP chưa làm thuật toán tự động xếp gia đình ngồi gần nhau. | Staff thao tác thủ công xếp chỗ trên giao diện Admin. |
-| **DEC-005** | Người thực hiện đổi tàu nhập Hạn chót (Deadline) để khách chọn lại ghế. | Lưu `reselect_deadline` trong sự kiện Đổi tàu. |
-| **DEC-006** | Thanh toán tại quầy chỉ cấp Booking Code chưa thanh toán (`UNPAID`). | Ban đầu không sinh bản ghi `TICKETS` và không có QR Code. |
-| **DEC-007** | Booking chưa thanh toán không có vé hoặc QR hợp lệ để lên tàu. | QR Scanner API chặn 100% Booking chưa `PAID`. |
-| **DEC-008** | Staff xác nhận đã thu tiền -> Hệ thống mới phát hành Vé và QR Code. | Trigger event `PaymentReceivedEvent` -> Sinh Ticket & QR. |
-| **DEC-009** | Booking quầy chưa thu tiền giữ ghế đến `expires_at = departure_time - X phút`. | Cronjob quét và nhả ghế khi chạm mốc `expires_at`. |
-| **DEC-010** | Giá trị `X` phút được quản lý trong Settings (không write hardcode trong code). | Trích xuất `X` từ `versioned_settings` table. |
-| **DEC-011** | Superdong hủy chuyến -> Khách được chọn Hoàn 100% tiền hoặc Đổi chuyến khác. | Đưa Booking vào trạng thái `PENDING_CUSTOMER_ACTION`. |
-| **DEC-012** | Superdong đổi giờ chạy -> Giữ nguyên vé và ghế, gửi thông báo giờ mới. | Cập nhật `departure_time` của Trip, gửi SMS/Email. |
-| **DEC-013** | Đổi giờ chạy mà khách không đồng ý -> Được chọn Đổi chuyến hoặc Hoàn 100% tiền. | Cung cấp UI portal cho khách chọn phương án. |
-| **DEC-014** | Hủy vé hỗ trợ Staff duyệt thủ công hoặc Hệ thống tự động theo cấu hình. | Bật/tắt qua Feature Toggle trong Settings. |
-| **DEC-015** | Đổi chuyến hỗ trợ tại Quầy, Gửi yêu cầu Web hoặc Khách tự đổi trực tuyến. | Cung cấp 3 API endpoints riêng biệt cho 3 kênh. |
-| **DEC-016** | Các hình thức đổi chuyến có thể bật/tắt bằng cấu hình. | Kiểm tra Config trước khi cho phép đổi chuyến. |
-| **DEC-017** | Giá vé được cấu hình linh hoạt theo các trục nghiệp vụ. | Fare Engine tính theo Hành trình, Group, Zone, Thời gian. |
-| **DEC-018** | Xác định Hành trình (Journey) trước khi tính giá và kiểm tra ghế trống. | API bắt buộc truyền `journey_id` trước `trip_id`. |
-| **DEC-019** | Công ty tự tạo và cấu hình các Nhóm hành khách (Passenger Types). | Dynamic master data trong bảng `passenger_types`. |
-| **DEC-020** | Việc Em bé có ghế riêng hay không được điều khiển bằng cấu hình. | Boolean config `infant_requires_seat`. |
-| **DEC-021** | Khuyến mãi có thể áp dụng cho toàn Booking hoặc từng Hành khách. | `discounts` table hỗ trợ `scope = BOOKING | PASSENGER`. |
-| **DEC-022** | QR Code hỗ trợ Check-in toàn bộ đơn hoặc riêng từng hành khách. | QR chứa `booking_code` (đoàn) hoặc `ticket_code` (lẻ). |
-| **DEC-023** | Quy tắc cộng dồn Coupon được cấu hình riêng trên từng mã. | Flag `is_stackable` trong bảng `coupons`. |
-| **DEC-024** | Hóa đơn VAT được phát hành qua hệ thống bên ngoài. | Tích hợp Async Webhook/Queue đẩy data VAT. |
-| **DEC-025** | Hệ thống mới phát hành Hóa đơn Bán lẻ (Retail Sales Receipt). | Sinh PDF/Print Hóa đơn bán lẻ nội bộ ngay tại quầy. |
-| **DEC-026** | Khách không bắt buộc đăng nhập để đặt vé. | Cho phép Checkout dưới dạng Guest. |
-| **DEC-027** | Khách vãng lai bắt buộc cung cấp SĐT/Email và nhận link tra cứu vé. | Send Grid / Local SMS gửi Secure Hash URL. |
-| **DEC-028** | Khách có tài khoản được xem lịch sử và nhận ưu đãi riêng. | Auth Guard cho phép lưu `user_id` vào `bookings`. |
-| **DEC-029** | Luồng đặt vé và thanh toán phải tối ưu, giảm tối đa cản trở. | Không bắt đăng ký tài khoản gây ngắt đoạn checkout. |
-
----
-
-### 📌 Quyết Định Từ Anh Hiếu (DEC-030 đến DEC-041)
-
-| Mã DEC | Quyết Định Nghiệp Vụ | Tác Động Logic Backend |
-| :--- | :--- | :--- |
-| **DEC-030** | Payment thành công SAU KHI Booking hết hạn (`EXPIRED`) -> Không khôi phục đơn, chuyển Staff xử lý thủ công. | Tạo bản ghi `payment_reconciliations`, đánh dấu `RECONCILE_NEEDED`. |
-| **DEC-031** | Payment ở trạng thái `UNKNOWN` -> Khóa không cho tạo Payment mới cho đến khi đối soát xong. | Lock Booking state `PAYMENT_LOCKED`. |
-| **DEC-032** | Chính sách hủy vé cấu hình theo mốc thời gian, mức phí và % hoàn tiền. | Matrix phạt phí trong `cancellation_policies`. |
-| **DEC-033** | Booking đã sử dụng một phần (Partially used) -> Không tự động hoàn tiền, Staff xem xét từng ca. | Chặn API Auto-Refund nếu có ít nhất 1 leg đã check-in. |
-| **DEC-034** | Phân quyền RBAC tách theo Quầy, Vận hành, Soát vé, Quản lý. Refund/Override thuộc Quản lý. | Permission Gate: `refund.override` chỉ gán cho `Role::MANAGER`. |
-| **DEC-035** | Khách vãng lai thao tác nhạy cảm (đổi/hủy/sửa SĐT) bắt buộc xác minh OTP. | Require `otp_token` trước khi thực thi Action. |
-| **DEC-036** | Chỉ Quản lý được sửa Check-in nhầm trước giờ khởi hành và bắt buộc nhập lý do. | Audit Log ghi nhận `override_reason` bắt buộc. |
-| **DEC-037** | MVP KHÔNG hỗ trợ Check-in Offline. Kết nối mạng ngắt -> Không cho check-in. | Client App không lưu cache check-in local. |
-| **DEC-038** | Chỉ sử dụng đơn vị tiền VND, làm tròn tại Tổng tiền cuối cùng của Booking. | `Math.round()` ở dòng cuối cùng của Quote Engine. |
-| **DEC-039** | Cấm Hard Delete Booking/Payment/Ticket. Xử lý dữ liệu cá nhân theo quy trình thủ công. | Áp dụng Soft Delete hoặc Status State Machine. |
-| **DEC-040** | Booker quản lý Booking; Passenger chỉ xem vé của chính mình, không được sửa Booking. | Access Policy kiểm tra `booker_id` vs `passenger_id`. |
-| **DEC-041** | Audit Log bắt buộc lưu ai, khi nào, lý do, data before/after. Đọc append-only, cấm sửa/xóa. | `audit_logs` table chỉ cho phép `INSERT` operation. |
+| Mã DEC | Nội Dung Quyết Định Nghiệp Vụ | Người Chốt |
+|---|---|---|
+| **DEC-001** | Backend mới làm chủ toàn bộ Chuyến, Ghế và Đơn đặt vé. | Anh Hùng |
+| **DEC-002** | Khi đổi tàu làm thay đổi sơ đồ, khách được tự chọn lại ghế trên sơ đồ mới. | Anh Hùng |
+| **DEC-003** | Khách không chọn lại ghế đúng hạn thì nhân viên chọn ghế thủ công trên sơ đồ. | Anh Hùng |
+| **DEC-004** | MVP chưa làm thuật toán tự động xếp các hành khách cùng đơn ngồi gần nhau. | Anh Hùng |
+| **DEC-005** | Người thực hiện đổi tàu nhập hạn cuối để khách chọn lại ghế. | Anh Hùng |
+| **DEC-006** | Thanh toán tại quầy chỉ cấp Booking Code chưa thanh toán (`UNPAID`). | Anh Hùng |
+| **DEC-007** | Booking chưa thanh toán không có vé hoặc QR hợp lệ để lên tàu. | Anh Hùng |
+| **DEC-008** | Nhân viên xác nhận đã thu tiền thì hệ thống mới phát hành vé và QR. | Anh Hùng |
+| **DEC-009** | Booking thanh toán tại quầy hết hạn trước giờ khởi hành `X` phút. | Anh Hùng |
+| **DEC-010** | Giá trị `X` được quản lý trong Cấu hình (`Settings`), không viết cứng trong mã nguồn. | Anh Hùng |
+| **DEC-011** | Khi Superdong hủy chuyến, khách chọn hoàn toàn bộ tiền hoặc chuyển sang chuyến khác. | Anh Hùng |
+| **DEC-012** | Khi đổi giờ chạy, vé và ghế được giữ nguyên. | Anh Hùng |
+| **DEC-013** | Khách không chấp nhận giờ mới được chuyển chuyến hoặc hoàn tiền. | Anh Hùng |
+| **DEC-014** | Hủy vé hỗ trợ nhân viên duyệt thủ công hoặc hệ thống tự động xử lý theo cấu hình. | Anh Hùng |
+| **DEC-015** | Đổi chuyến hỗ trợ tại quầy, gửi yêu cầu trên website hoặc khách tự đổi trực tuyến. | Anh Hùng |
+| **DEC-016** | Các hình thức đổi chuyến được bật hoặc tắt bằng cấu hình. | Anh Hùng |
+| **DEC-017** | Giá vé được cấu hình linh hoạt theo các yếu tố nghiệp vụ. | Anh Hùng |
+| **DEC-018** | Phải xác định hành trình trước khi tính giá và kiểm tra ghế trống. | Anh Hùng |
+| **DEC-019** | Công ty được tự tạo và cấu hình các nhóm hành khách. | Anh Hùng |
+| **DEC-020** | Việc em bé có ghế riêng được bật hoặc tắt bằng cấu hình. | Anh Hùng |
+| **DEC-021** | Khuyến mãi có thể áp dụng cho toàn Booking hoặc từng hành khách. | Anh Hùng |
+| **DEC-022** | QR hỗ trợ Check-in toàn bộ hành khách hoặc riêng từng hành khách. | Anh Hùng |
+| **DEC-023** | Quy tắc cho phép cộng dồn được cấu hình riêng trên từng Coupon. | Anh Hùng |
+| **DEC-024** | Hóa đơn VAT được phát hành qua hệ thống bên ngoài. | Anh Hùng |
+| **DEC-025** | Hệ thống mới hỗ trợ quản lý hoặc phát hành hóa đơn bán lẻ. | Anh Hùng |
+| **DEC-026** | Khách không bắt buộc đăng nhập để đặt vé. | Anh Hùng |
+| **DEC-027** | Khách vãng lai phải cung cấp thông tin liên hệ và nhận link tra cứu vé qua Email. | Anh Hùng |
+| **DEC-028** | Khách có tài khoản được quản lý lịch sử và nhận chương trình khuyến mãi dành riêng. | Anh Hùng |
+| **DEC-029** | Luồng đặt vé và thanh toán phải thuận tiện, không bắt đăng ký tài khoản gây cản trở. | Anh Hùng |
+| **DEC-030** | Payment thành công sau khi Booking hết hạn không tự khôi phục Booking; giao dịch chuyển cho nhân viên xử lý thủ công (`MANUAL_REVIEW`). | Anh Hiếu |
+| **DEC-031** | Khi Payment đang ở trạng thái chưa rõ kết quả (`UNKNOWN`), khách không được tạo Payment mới cho đến khi hoàn tất đối soát. | Anh Hiếu |
+| **DEC-032** | Chính sách khách chủ động hủy vé được cấu hình theo các mốc thời gian, mức phí và phần trăm hoàn tiền. | Anh Hiếu |
+| **DEC-033** | Booking đã sử dụng một phần không được tự động hoàn tiền; nhân viên xem xét và quyết định từng trường hợp. | Anh Hiếu |
+| **DEC-034** | Quyền nhân viên được tách theo vai trò Quầy, Vận hành, Soát vé và Quản lý; refund, override thuộc vai trò Quản lý. | Anh Hiếu |
+| **DEC-035** | Khách vãng lai truy cập Booking bằng link bảo mật; thao tác nhạy cảm phải xác minh OTP. | Anh Hiếu |
+| **DEC-036** | Chỉ Quản lý được sửa Check-in nhầm trước giờ khởi hành và bắt buộc nhập lý do. | Anh Hiếu |
+| **DEC-037** | MVP không hỗ trợ Check-in Offline; khi mất kết nối không ghi nhận Check-in mới trên hệ thống. | Anh Hiếu |
+| **DEC-038** | Hệ thống chỉ sử dụng VND, không lưu số lẻ và làm tròn tại tổng tiền cuối cùng của Booking. | Anh Hiếu |
+| **DEC-039** | Không hard delete Booking, Payment, Ticket và Check-in; lifecycle quản lý hoàn toàn bằng State Machine. | Anh Hiếu |
+| **DEC-040** | Người đặt vé quản lý Booking; hành khách chỉ được xem vé của chính mình, không tự thay đổi Booking. | Anh Hiếu |
+| **DEC-041** | Audit bắt buộc lưu người thao tác, thời gian, lý do và dữ liệu trước/sau; chỉ Quản lý được xem và audit không được sửa hoặc xóa. | Anh Hiếu |
 
 ---
 
 ## 🗿 Grug Đúc Kết
 
 <Callout type="tip">
-  **🗿 Grug Kiến Trúc Mách Bảo**: *"41 Luật bộ tộc khắc trên bia đá! Sếp Hùng chốt từ 1 tới 29, Sếp Hiếu chốt nốt từ 30 tới 41! Code đúng bia đá là không bao giờ ăn gậy!"*
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"41 điều luật đục trên bia đá là chân lý của bộ tộc! Không tự nghĩ ra luật mới, chỉ làm đúng theo lời tù trưởng đã dặn!"*
 </Callout>

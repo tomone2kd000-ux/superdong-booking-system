@@ -1,27 +1,29 @@
 ---
-title: "04. Xuất Hóa Đơn Bán Lẻ & Dữ Liệu Hóa Đơn VAT (DEC-024, DEC-025)"
-description: "Phát hành Hóa đơn bán lẻ nội bộ và tích hợp kết nối xuất Hóa đơn VAT bên ngoài (DEC-024, DEC-025)"
+title: "04. Hóa Đơn Bán Lẻ & Dữ Liệu VAT (DEC-024, DEC-025)"
+description: "Phát hành hóa đơn bán lẻ theo yêu cầu Booking và tích hợp dữ liệu phát hành hóa đơn VAT điện tử"
 ---
 
-# Xuất Hóa Đơn Bán Lẻ & Dữ Liệu Hóa Đơn VAT
+# Hóa Đơn Bán Lẻ & Dữ Liệu VAT (DEC-024, DEC-025)
 
-Quản lý chứng từ tài chính và nghĩa vụ thuế đối với từng Booking.
-
----
-
-## 🎯 Bài Toán Nghiệp Vụ (DEC-024, DEC-025)
-
-1. **Hóa Đơn Bán Lẻ Nội Bộ (DEC-025)**: Hệ thống mới hỗ trợ quản lý và in **Hóa đơn bán lẻ (Retail Invoice)** trực tiếp cho khách hàng mua vé tại quầy hoặc tải file PDF trên website.
-2. **Xuất Hóa Đơn VAT Qua Hệ Thống Bên Ngoài (DEC-024)**: Hóa đơn GTGT (VAT) được phát hành qua phần mềm hóa đơn điện tử bên ngoài (như Viettel S-Invoice / VNPT Invoice). Hệ thống mới lưu trữ thông tin công ty, MST và đẩy dữ liệu qua API/Queue tích hợp.
+Hệ thống Superdong hỗ trợ quản lý hóa đơn bán lẻ và chuẩn bị dữ liệu xuất hóa đơn VAT theo đúng các quyết định nghiệp vụ.
 
 ---
 
-## 💡 Giải Pháp Kiến Trúc Backend
+## 🎯 Bài Toán Nghiệp Vụ & Quyết Định (DEC-024, DEC-025)
+
+1. **Phát Hành Hóa Đơn Bán Lẻ Theo Yêu Cầu (DEC-025)**:
+   - Hóa đơn bán lẻ được phát hành **khi Booking có ghi nhận yêu cầu xuất hóa đơn** (workflow:1838-1839). Không tự động sinh cho 100% Booking nếu khách không có nhu cầu.
+2. **Xuất Hóa Đơn VAT Qua Hệ Thống Bên Ngoài (DEC-024)**:
+   - Hệ thống Superdong không tự xây module VAT nội bộ. Hóa đơn VAT điện tử được phát hành qua Cổng kết nối tích hợp hệ thống bên ngoài (Ví dụ: Provider tích hợp qua Adapter, nằm ngoài phạm vi MVP - workflow:3459).
+
+---
+
+## 💡 Luồng Xử Lý Hóa Đơn Bán Lẻ & VAT
 
 ![Grug Retail VAT Invoice](/images/grug_retail_vat_invoice.jpeg)
 
-- **Retail Invoice Generation**: Ngay khi Booking chuyển trạng thái `PAID`, sinh mã `invoice_no` nội bộ và file PDF Hóa đơn bán lẻ.
-- **VAT Integration Queue**: Đẩy message `ExportVATInvoiceJob` vào Laravel Database Queue (`queue:work`) để bên thứ ba phát hành hóa đơn VAT điện tử.
+- **Retail Invoice Generation**: Ngay khi Booking chuyển trạng thái `PAID` VÀ có gắn flag `requires_invoice = true`, sinh mã `invoice_no` nội bộ và xuất file Hóa đơn bán lẻ.
+- **VAT Integration Queue**: Đẩy message `ExportVATInvoiceJob` vào Laravel Database Queue (`queue:work`) để kết nối Adapter phát hành hóa đơn VAT bên thứ ba.
 
 ---
 
@@ -29,34 +31,38 @@ Quản lý chứng từ tài chính và nghĩa vụ thuế đối với từng B
 
 ```mermaid
 erDiagram
-    BOOKINGS ||--o| RETAIL_INVOICES : issues
-    BOOKINGS ||--o| VAT_INVOICE_REQUESTS : requests
+    BOOKINGS ||--o| RETAIL_INVOICES : issues_when_requested
+    RETAIL_INVOICES ||--o| VAT_EXPORTS : sends_payload_to
+
+    BOOKINGS {
+        bigint id PK
+        string booking_code UK
+        boolean requires_invoice "Chỉ TRUE khi khách yêu cầu xuất hóa đơn"
+    }
 
     RETAIL_INVOICES {
         bigint id PK
         bigint booking_id FK
-        string invoice_no UK "INV-2026-881"
-        decimal total_amount
+        string invoice_no UK
+        bigint total_amount_vnd "VND nguyên - DEC-038"
         timestamp issued_at
     }
 
-    VAT_INVOICE_REQUESTS {
+    VAT_EXPORTS {
         bigint id PK
-        bigint booking_id FK
-        string company_name "Công ty TNHH ABC"
-        string tax_code "0101234567"
-        string company_address
-        string status "PENDING | SENT | EXPORTED | FAILED"
+        bigint retail_invoice_id FK
+        string provider_name "Adapter tích hợp bên thứ ba"
+        string status "PENDING | EXPORTED | FAILED"
     }
 ```
 
 ### 🔍 Lý Giải TẠI SAO (Schema Rationale):
-- **Vì sao tách `RETAIL_INVOICES` và `VAT_INVOICE_REQUESTS`?**: Hóa đơn bán lẻ được xuất tự động 100% cho mọi Booking thanh toán thành công. Trong khi Hóa đơn VAT chỉ phát sinh khi khách hàng chủ động tích chọn yêu cầu và nhập thông tin MST công ty.
+- **Vì sao tách `RETAIL_INVOICES` khỏi `BOOKINGS`?**: Để đảm bảo nguyên tắc phân rã Single Responsibility. Không phình to bảng `BOOKINGS` với các thông tin MST, Địa chỉ công ty xuất hóa đơn.
 
 ---
 
 ## 🗿 Grug Đúc Kết
 
 <Callout type="tip">
-  **🗿 Grug Kiến Trúc Mách Bảo**: *"Hóa đơn bán lẻ Grug tự in ngay tại quầy! Hóa đơn VAT thuế nhà nước thì gửi qua con cú đưa thư cho phần mềm bên ngoài!"*
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Ai cần tờ giấy hóa đơn thì máy mới in! Tiền vé đóng xong, máy đẩy tin nhắn qua đường dây cho bên thuế làm hóa đơn đỏ!"*
 </Callout>

@@ -1,21 +1,22 @@
 ---
-title: "02. Quản Lý Ca Làm Việc & Kết Ca (Shift Management & Cash Reconciliation)"
-description: "Workflow quản lý ca làm việc của Nhân viên phòng vé và quy trình đối soát tiền mặt kết ca"
+title: "02. Quản Lý Ca Làm Việc & Kết Ca (Candidate Capability Proposal)"
+description: "Đề xuất tính năng nghiệp vụ Quản lý ca làm việc và đối soát tiền mặt tại quầy (Candidate Capability)"
 ---
 
-# Quản Lý Ca Làm Việc & Kết Ca (Shift Management & Cash Reconciliation)
+# Quản Lý Ca Làm Việc & Kết Ca (Candidate Capability Proposal)
 
-Kiểm soát dòng tiền mặt thu được tại các quầy bán vé bến tàu Superdong.
-
----
-
-## 🎯 Bài Toán Nghiệp Vụ
-
-Nhân viên bán vé làm việc theo ca (Sáng / Chiều). Cuối ca, nhân viên phải thực hiện **Kết ca (End of Shift)**, đếm tổng số tiền mặt thực tế thu được trong hộc tiền và đối soát với tổng số tiền thu từ các Booking đã bán trong hệ thống.
+> [!NOTE]
+> **Lưu ý Nghiệp Vụ**: Quản lý ca làm việc (`COUNTER_SHIFTS`) là một **Tính năng Đề xuất (Candidate Capability Proposal)** dành cho các phiên bản mở rộng tiếp theo, chưa nằm trong các Quyết định nghiệp vụ cốt lõi (DEC-001 đến DEC-041) của phiên bản MVP.
 
 ---
 
-## 💡 Giải Pháp Kiến Trúc Backend
+## 🎯 Bài Toán Nghiệp Vụ Đề Xuất
+
+Nhân viên bán vé làm việc theo ca (Sáng / Chiều). Cuối ca, nhân viên thực hiện **Kết ca (End of Shift)**, đếm tổng số tiền mặt thực tế thu được trong hộc tiền và đối soát với tổng số tiền thu từ các Booking đã bán trong hệ thống.
+
+---
+
+## 💡 Giải Pháp Kiến Trúc Đề Xuất (Proposal Workflow)
 
 ![Grug Shift End Cash](/images/grug_shift_end_cash.jpeg)
 
@@ -32,7 +33,7 @@ flowchart TD
 
 ---
 
-## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO
+## 🪨 Chi Tiết ERD Đề Xuất (Candidate Schema)
 
 ```mermaid
 erDiagram
@@ -45,21 +46,18 @@ erDiagram
         bigint location_id FK
         timestamp started_at
         timestamp ended_at
-        decimal initial_cash
-        decimal system_total_cash
-        decimal actual_counted_cash
-        decimal discrepancy_amount
+        bigint initial_cash_vnd "VND nguyên - DEC-038"
+        bigint system_total_cash_vnd
+        bigint actual_counted_cash_vnd
+        bigint discrepancy_amount_vnd
         string status "OPEN | CLOSED | DISCREPANCY"
     }
 ```
-
-### 🔍 Lý Giải TẠI SAO (Schema Rationale):
-- **Vì sao mọi `BOOKING` bán tại quầy phải lưu `shift_id` (FK)?**: Để khi phát hiện lệch tiền ở ca làm việc 14h-18h, Quản lý có thể lọc ngay lập tức toàn bộ các Booking phát sinh trong đúng `shift_id` đó để tìm ra hóa đơn bị nhầm lẫn.
 
 ---
 
 ## 🗿 Grug Đúc Kết
 
 <Callout type="tip">
-  **🗿 Grug Kiến Trúc Mách Bảo**: *"Hết ca đếm sò tiền mặt trong rương! Số sò cầm trên tay phải khớp 100% với chữ đục trên máy thì tù trưởng mới cho về chòi ngủ!"*
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Hết ca đếm sò tiền mặt trong rương! Đây là tính năng mở rộng đề xuất để tù trưởng dễ quản lý hộc tiền phòng vé!"*
 </Callout>
