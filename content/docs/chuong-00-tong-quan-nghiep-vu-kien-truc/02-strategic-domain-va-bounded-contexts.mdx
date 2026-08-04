@@ -1,6 +1,6 @@
 ---
 title: "02. Strategic Domain & Bounded Contexts"
-description: "Bản đồ ranh giới nghiệp vụ và Ma trận phân quyền các tác nhân (Actor Matrix) trong Superdong"
+description: "Bản đồ ranh giới nghiệp vụ và Phân định Tác nhân (Actor Mapping) theo Spatie RBAC Package"
 ---
 
 # Strategic Domain & Bounded Contexts
@@ -66,52 +66,72 @@ flowchart TD
 
 ---
 
-## 👥 Actor Matrix (Ma Trận Người Dùng)
+## 👥 Phân Định Actor Nghiệp Vụ & Spatie RBAC Mapping
 
 ![Grug Actor Matrix](/images/grug_actor_matrix.jpeg)
 
-Hệ thống phục vụ 5 nhóm tác nhân chính với phạm vi quyền hạn tách biệt:
+🚨 **LƯU Ý KIẾN TRÚC QUAN TRỌNG**: "Actor Nghiệp Vụ" trong tài liệu **KHÔNG ĐỒNG NGHĨA với một giá trị cột enum `users.role`**. Dự án `E:\cty\superdong-be` **dùng package `Spatie\Permission`** với các bảng `roles`, `permissions`, `model_has_roles`. Bảng `users` tuyệt đối KHÔNG có cột `role` hay `roles`.
 
-| Actor (Tác nhân) | Hình thức Truy cập | Vai trò & Quyền hạn Nghiệp vụ | Giới hạn An toàn Backend |
-| :--- | :--- | :--- | :--- |
-| **Khách Vãng Lai (Guest)** | Web Public (No Login) | Tìm chuyến, đặt vé, chọn ghế, thanh toán. Nhận link tra cứu vé qua Email. | Phải xác minh OTP khi đổi thông tin hoặc hủy vé (DEC-035). |
-| **Khách Tài Khoản (Account)** | Web/App Member | Đặt vé nhanh, lưu thông tin hành khách, nhận ưu đãi khuyến mãi riêng. | Chỉ xem & quản lý Booking do chính mình tạo (DEC-040). |
-| **Nhân Viên Quầy (Staff)** | Backoffice App | Bán vé tại quầy, thu tiền mặt, in vé, hỗ trợ khách đổi/hủy vé theo chính sách. | Phân quyền theo Bến (Station-scoped RBAC - DEC-034). |
-| **Soát Vé (Checker)** | Thiết bị Handheld QR | Quét mã QR tại cầu cảng để xác nhận hành khách lên tàu (Boarded). | Chỉ quét check-in online; Cấm Check-in Offline (DEC-037). |
-| **Quản Lý (Manager)** | Backoffice Admin | Đổi tàu, hủy/hoãn chuyến, duyệt hoàn tiền, ghi đè check-in nhầm, xem Audit Log. | Có quyền Override & thao tác biến cố vận hành cao nhất. |
+### 📌 Ma Trận Mapping Chuẩn Giữa Nghiệp Vụ & Mã Nguồn Backend
+
+| Khái Niệm Actor | Cách Biểu Diễn Kỹ Thuật Trong Database & Codebase | Quyền Hạn & Giới Hạn An Toàn |
+| :--- | :--- | :--- |
+| **Khách Vãng Lai (GUEST)** | **Không có bản ghi `users`**. Bản ghi `BOOKING` có `user_id = NULL`. | Đặt vé không cần tài khoản (DEC-026). Thao tác nhạy cảm bằng link bảo mật + OTP (DEC-035). |
+| **Khách Tài Khoản (ACCOUNT)** | **User đã đăng ký/đăng nhập** (`user_id != NULL`). Không phải 1 role Spatie. | Xem & quản lý lịch sử Booking do chính mình tạo (DEC-028, DEC-040). |
+| **Nhân Viên Quầy** | Spatie Role: **`counter_staff`** (gán qua `model_has_roles`). | Bán vé tại quầy, thu tiền mặt, in vé. Gắn `location_id` để giới hạn bến (DEC-034). |
+| **Nhân Viên Vận Hành** | Spatie Role: **`operations_staff`** (gán qua `model_has_roles`). | Đổi tàu khác sơ đồ, dời giờ chạy, xử lý chuyến bão hủy (DEC-002, DEC-011). |
+| **Soát Vé Cầu Cảng** | Spatie Role: **`checkin_staff`** (gán qua `model_has_roles`). | Quét QR Code check-in. Cấm Check-in Offline trong MVP (DEC-037). |
+| **Quản Lý Vận Hành** | Spatie Role: **`manager`** (gán qua `model_has_roles`). | Quyền cao cấp: Override hoàn tiền, sửa check-in nhầm (DEC-034, DEC-036). |
+| **Admin Hệ Thống** | Spatie Role: **`admin`** (đã seed sẵn trong hệ thống). | Quản trị toàn bộ Master Data, Users và Cấu hình hệ thống. |
 
 ---
 
-## 🪨 Chi Tiết ERD & Lý Giải TẠI SAO
+## 🪨 Chi Tiết ERD & Spatie Permission Schema
 
 ```mermaid
 erDiagram
-    USERS ||--o| BOOKINGS : creates
-    LOCATIONS ||--|{ USERS : scopes
-    LOCATIONS ||--|{ TRIPS : departs_from
+    USERS ||--o| BOOKINGS : "user_id (NULL if GUEST)"
+    LOCATIONS ||--|{ USERS : "location_id (NULL for GUEST/ACCOUNT)"
+    USERS ||--|{ MODEL_HAS_ROLES : has
+    ROLES ||--|{ MODEL_HAS_ROLES : assigned_to
+    ROLES ||--|{ ROLE_HAS_PERMISSIONS : contains
+    PERMISSIONS ||--|{ ROLE_HAS_PERMISSIONS : granted_in
 
     USERS {
         bigint id PK
-        string email
-        string role "GUEST | ACCOUNT | STAFF | CHECKER | MANAGER"
-        bigint location_id FK "Null for Guest/Account"
+        string name
+        string email UK
+        string phone
+        bigint location_id FK "Gắn với Bến tàu cho Staff/Checker"
     }
 
-    LOCATIONS {
+    ROLES {
         bigint id PK
-        string code UK "RG | HT | PQ"
-        string name "Bến Rạch Giá"
+        string name "counter_staff | operations_staff | checkin_staff | manager | admin"
+        string guard_name "api | web"
+    }
+
+    PERMISSIONS {
+        bigint id PK
+        string name "booking.override | checkin.reverse | refund.approve"
+        string guard_name "api | web"
+    }
+
+    MODEL_HAS_ROLES {
+        bigint role_id FK
+        string model_type "AppSection\\User\\Models\\User"
+        bigint model_id FK
     }
 ```
 
 ### 🔍 Lý Giải TẠI SAO (Schema Rationale):
-- **Vì sao `USERS` có `location_id` (FK)?**: Nhân viên phòng vé (`STAFF`) tại Bến Rạch Giá (`location_id`) không được phép bán vé hay chỉnh sửa chuyến của Bến Hà Tiên. Phân quyền RBAC gắn chặt với Bến tàu (`location_id`).
-- **Vì sao `GUEST` không cần tạo Account?**: Để giảm tối đa ma sát checkout (DEC-029). Hệ thống tự sinh `guest_session` và mã bảo mật tra cứu qua Email/SMS.
+- **Vì sao `GUEST` có `user_id = NULL` trong `BOOKINGS`?**: Để giảm tối đa ma sát checkout (DEC-029). Hệ thống không ép tạo User rác trong DB, tiết kiệm tài nguyên và đơn giản hóa truy vấn.
+- **Vì sao dùng Spatie RBAC thay vì Cột Enum `role`?**: Giúp mở rộng quyền động (`permissions`) linh hoạt. Khi cần cấp riêng quyền `refund.approve` cho một nhân viên quầy lâu năm, ta gán trực tiếp qua `model_has_permissions` mà không cần sửa cấu trúc DB!
 
 ---
 
 ## 🗿 Grug Đúc Kết
 
 <Callout type="tip">
-  **🗿 Grug Kiến Trúc Mách Bảo**: *"Người rừng đi săn (Guest) không cần đăng ký hộ khẩu cảng! Chỉ cần để lại tên và số điện thoại, Grug đưa vé là xong!"*
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Khách vãng lai (Guest) không có tên trên sổ bộ tộc (user_id = NULL)! Nhân viên (Staff) có huy hiệu thẻ Spatie `counter_staff` đeo trên cổ!"*
 </Callout>
