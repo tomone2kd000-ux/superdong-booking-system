@@ -53,19 +53,19 @@ erDiagram
 
     ROLES {
         bigint id PK
-        string name "counter_staff | operations_staff | checkin_staff | manager | admin"
-        string guard_name "api | web"
+        string name "counter_staff / operations_staff / checkin_staff / manager / admin"
+        string guard_name "api / web"
     }
 
     PERMISSIONS {
         bigint id PK
-        string name "refund.approve | checkin.override"
+        string name "refund.approve / checkin.override"
     }
 
     AUDIT_LOGS {
         bigint id PK
         bigint user_id FK
-        string action "BOOKING_CANCELLED | CHECKIN_OVERRIDDEN"
+        string action "BOOKING_CANCELLED / CHECKIN_OVERRIDDEN"
         string auditable_type "Booking"
         bigint auditable_id
         json payload_before

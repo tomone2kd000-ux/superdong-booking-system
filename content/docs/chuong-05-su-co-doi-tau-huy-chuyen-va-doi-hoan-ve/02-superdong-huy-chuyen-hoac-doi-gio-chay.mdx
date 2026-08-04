@@ -49,7 +49,7 @@ erDiagram
     TRIP_INCIDENTS {
         bigint id PK
         bigint trip_id FK
-        string incident_type "CANCELLED | DELAYED"
+        string incident_type "CANCELLED / DELAYED"
         timestamp new_departure_time
         string reason "Bão số 3 / Sự cố máy"
     }
@@ -58,7 +58,7 @@ erDiagram
         bigint id PK
         bigint incident_id FK
         bigint booking_id FK
-        string choice "REFUND_FULL | TRANSFER_TRIP | ACCEPT_DELAY"
+        string choice "REFUND_FULL / TRANSFER_TRIP / ACCEPT_DELAY"
         decimal refunded_amount
     }
 ```

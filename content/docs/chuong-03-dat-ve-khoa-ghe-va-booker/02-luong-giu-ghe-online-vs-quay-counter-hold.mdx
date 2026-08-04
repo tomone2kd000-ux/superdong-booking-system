@@ -58,9 +58,9 @@ erDiagram
     BOOKINGS {
         bigint id PK
         string booking_code UK
-        string channel "ONLINE | COUNTER"
+        string channel "ONLINE / COUNTER"
         timestamp expires_at
-        string status "UNPAID | EXPIRED"
+        string status "UNPAID / EXPIRED"
     }
 ```
 

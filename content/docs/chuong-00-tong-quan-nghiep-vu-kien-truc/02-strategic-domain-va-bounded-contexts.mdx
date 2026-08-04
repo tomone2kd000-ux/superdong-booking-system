@@ -103,14 +103,14 @@ erDiagram
 
     ROLES {
         bigint id PK
-        string name "counter_staff | operations_staff | checkin_staff | manager | admin"
-        string guard_name "api | web"
+        string name "counter_staff / operations_staff / checkin_staff / manager / admin"
+        string guard_name "api / web"
     }
 
     PERMISSIONS {
         bigint id PK
-        string name "booking.override | checkin.reverse | refund.approve"
-        string guard_name "api | web"
+        string name "booking.override / checkin.reverse / refund.approve"
+        string guard_name "api / web"
     }
 
     MODEL_HAS_ROLES {

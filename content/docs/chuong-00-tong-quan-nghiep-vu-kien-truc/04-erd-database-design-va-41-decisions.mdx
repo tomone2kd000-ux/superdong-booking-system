@@ -25,7 +25,7 @@ erDiagram
     TRIPS ||--|{ TRIP_SEAT_INVENTORIES : tracks
 
     BOOKINGS ||--|{ BOOKING_LEGS : contains
-    BOOKINGS ||--o| BOOKER_SNAPSHOT : captures
+    BOOKINGS ||--o| BOOKER_SNAPSHOT : "captures"
     TRIPS ||--|{ BOOKING_LEGS : booked_for
     BOOKING_LEGS ||--|{ PASSENGERS : includes
     
@@ -35,12 +35,12 @@ erDiagram
     PASSENGERS ||--|{ TICKETS : issues_per_leg
     
     BOOKINGS ||--|{ PAYMENT_ATTEMPTS : pays_with
-    PAYMENT_ATTEMPTS ||--o| MANUAL_REVIEW : flags_on_expired
+    PAYMENT_ATTEMPTS ||--o| MANUAL_REVIEW : "flags_on_expired"
 
     BOOKINGS {
         bigint id PK
         string booking_code UK
-        string status "DRAFT | HELD | UNPAID | PAID | EXPIRED | CANCELLED"
+        string status "DRAFT / HELD / UNPAID / PAID / EXPIRED / CANCELLED"
         bigint grand_total_vnd "VND nguyên - DEC-038"
         timestamp expires_at
     }
@@ -57,14 +57,14 @@ erDiagram
         bigint id PK
         bigint booking_id FK
         bigint trip_id FK
-        string leg_type "DEPARTURE | RETURN"
+        string leg_type "DEPARTURE / RETURN"
     }
 
     PASSENGERS {
         bigint id PK
         bigint booking_leg_id FK
         string full_name
-        string passenger_type "ADULT | CHILD | INFANT"
+        string passenger_type "ADULT / CHILD / INFANT"
     }
 
     SEAT_ASSIGNMENTS {
@@ -80,22 +80,22 @@ erDiagram
         bigint booking_leg_id FK
         string ticket_code UK
         bigint version_no
-        string status "ISSUED | CHECKED_IN | CANCELLED"
+        string status "ISSUED / CHECKED_IN / CANCELLED"
     }
 
     PAYMENT_ATTEMPTS {
         bigint id PK
         bigint booking_id FK
-        string gateway_code "ONLINE_GATEWAY | COUNTER_CASH"
+        string gateway_code "ONLINE_GATEWAY / COUNTER_CASH"
         bigint amount_vnd "VND nguyên - DEC-038"
-        string status "PENDING | SUCCESS | FAILED | UNKNOWN"
+        string status "PENDING / SUCCESS / FAILED / UNKNOWN"
     }
 
     MANUAL_REVIEW {
         bigint id PK
         bigint payment_attempt_id FK
-        string reason "LATE_PAYMENT_EXPIRED | UNKNOWN_TIMEOUT"
-        string status "PENDING | RESOLVED"
+        string reason "LATE_PAYMENT_EXPIRED / UNKNOWN_TIMEOUT"
+        string status "PENDING / RESOLVED"
     }
 ```
 

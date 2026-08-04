@@ -39,12 +39,12 @@ erDiagram
     COUPONS {
         bigint id PK
         string code UK "SUMMER50"
-        string discount_type "FIXED | PERCENT"
+        string discount_type "FIXED / PERCENT"
         decimal discount_value "50000"
-        string scope "BOOKING | PASSENGER"
-        boolean is_stackable false
-        int max_usage 1000
-        int current_usage 42
+        string scope "BOOKING / PASSENGER"
+        boolean is_stackable "false"
+        int max_usage "1000"
+        int current_usage "42"
     }
 
     BOOKING_COUPONS {

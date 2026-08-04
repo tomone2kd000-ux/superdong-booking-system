@@ -40,11 +40,11 @@ erDiagram
         bigint id PK
         bigint route_id FK
         bigint passenger_type_id FK
-        string seat_zone "STANDARD | VIP"
+        string seat_zone "STANDARD / VIP"
         decimal base_price "330000"
         timestamp valid_from
         timestamp valid_to
-        boolean is_active true
+        boolean is_active "true"
     }
 ```
 

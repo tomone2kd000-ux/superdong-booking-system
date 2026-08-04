@@ -35,11 +35,11 @@ erDiagram
 
     PASSENGER_TYPES {
         bigint id PK
-        string code UK "ADULT | CHILD | INFANT | ELDERLY | DISABLED"
+        string code UK "ADULT / CHILD / INFANT / ELDERLY / DISABLED"
         string name "Người cao tuổi"
-        int min_age 60
-        int max_age 120
-        boolean requires_seat true
+        int min_age "60"
+        int max_age "120"
+        boolean requires_seat "true"
     }
 
     PASSENGERS {

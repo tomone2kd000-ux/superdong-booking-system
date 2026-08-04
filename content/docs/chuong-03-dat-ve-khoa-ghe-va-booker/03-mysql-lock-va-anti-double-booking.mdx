@@ -39,7 +39,7 @@ erDiagram
         bigint id PK
         bigint trip_id FK
         bigint seat_id FK
-        string status "AVAILABLE | HELD | SOLD"
+        string status "AVAILABLE / HELD / SOLD"
         bigint version_no "Version tăng mỗi lần update"
         bigint locked_by_booking_id FK
     }

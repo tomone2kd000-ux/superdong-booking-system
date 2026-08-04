@@ -37,22 +37,22 @@ erDiagram
         bigint id PK
         string code UK "SD-01"
         string name "Superdong I"
-        int total_capacity 275
+        int total_capacity "275"
     }
 
     VESSEL_LAYOUTS {
         bigint id PK
         bigint vessel_id FK
         string version_name "v2026.1"
-        boolean is_active true
+        boolean is_active "true"
     }
 
     SEATS {
         bigint id PK
         bigint layout_id FK
         string seat_code "A-01"
-        string deck "LOWER | UPPER"
-        string zone "STANDARD | VIP"
+        string deck "LOWER / UPPER"
+        string zone "STANDARD / VIP"
         int grid_row
         int grid_col
     }

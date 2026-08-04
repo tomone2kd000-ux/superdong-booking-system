@@ -40,22 +40,22 @@ flowchart TD
 ```mermaid
 erDiagram
     BOOKINGS ||--|{ PAYMENT_ATTEMPTS : receives
-    PAYMENT_ATTEMPTS ||--o| MANUAL_REVIEW : flags_on_expired
+    PAYMENT_ATTEMPTS ||--o| MANUAL_REVIEW : "flags_on_expired"
 
     PAYMENT_ATTEMPTS {
         bigint id PK
         bigint booking_id FK
-        string gateway_code "ONLINE_GATEWAY | COUNTER_CASH"
+        string gateway_code "ONLINE_GATEWAY / COUNTER_CASH"
         string transaction_no
         bigint amount_vnd "VND nguyên - DEC-038"
-        string status "SUCCESS | FAILED | UNKNOWN"
+        string status "SUCCESS / FAILED / UNKNOWN"
     }
 
     MANUAL_REVIEW {
         bigint id PK
         bigint payment_attempt_id FK
-        string reason "PAYMENT_AFTER_EXPIRED | UNKNOWN_TIMEOUT"
-        string resolution "REFUNDED | REASSIGNED_SEAT | PENDING"
+        string reason "PAYMENT_AFTER_EXPIRED / UNKNOWN_TIMEOUT"
+        string resolution "REFUNDED / REASSIGNED_SEAT / PENDING"
         bigint resolved_by_user_id FK
     }
 ```
