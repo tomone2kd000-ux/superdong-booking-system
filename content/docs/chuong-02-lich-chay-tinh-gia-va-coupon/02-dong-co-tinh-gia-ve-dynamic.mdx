@@ -25,7 +25,11 @@ Giá vé không cố định 300,000đ cho tất cả mọi người. Giá vé c
 
 Hệ thống xây dựng **Fare Engine** dựa trên bảng quy tắc `fare_rules`. Khi khách đặt vé, Quote Service sẽ thực hiện ghép nối các điều kiện (Pattern Matching) để tìm ra dòng giá phù hợp nhất.
 
-$$Giá\ Vé\ Cuối\ Cùng = Giá\ Cơ\ Bản \times Hệ\ Số\ Nhóm\ Khách + Phụ\ Phí\ Hạng\ VIP$$
+<Callout type="warn">
+  **🧮 Công Thức Tính Giá Vé Dynamic (Dynamic Fare Formula)**:
+  
+  **`Giá Vé Cuối Cùng`** = (**`Giá Cơ Bản`** × **`Hệ Số Nhóm Khách`**) + **`Phụ Phí Hạng VIP`** + **`Phụ Phí Dịp Lễ/Tết`**
+</Callout>
 
 ---
 

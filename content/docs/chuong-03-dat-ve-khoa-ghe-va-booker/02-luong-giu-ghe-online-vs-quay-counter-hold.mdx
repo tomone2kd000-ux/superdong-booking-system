@@ -14,7 +14,11 @@ Mỗi kênh bán vé áp dụng quy tắc tính thời gian hết hạn giữ gh
 1. **Giữ Ghế Online**: Khách chọn ghế A12 trên web và chuyển sang cổng VNPAY. Ghế phải được giữ trong đúng **15 phút**. Quá 15 phút chưa trả tiền -> Tự hủy đơn và nhả ghế.
 2. **Giữ Ghế Tại Quầy (DEC-009, DEC-010)**: Khách đến quầy chọn vé hoặc gọi điện đặt giữ chỗ trước. Ghế được giữ theo mốc thời gian trước giờ khởi hành:
 
-$$expires\_at = departure\_time - X\ phút$$
+<Callout type="info">
+  **⏱️ Công Thức Giữ Ghế Thanh Toán Tại Quầy (Counter Hold Formula)**:
+  
+  **`expires_at`** = **`departure_time`** − **`X phút`**
+</Callout>
 
 - **Quy tắc vàng (DEC-010)**: Giá trị `X` được quản lý trong **Cấu hình (Settings)**, tuyệt đối **KHÔNG viết cứng (hardcode)** 30 hay 60 phút trong mã nguồn!
 
