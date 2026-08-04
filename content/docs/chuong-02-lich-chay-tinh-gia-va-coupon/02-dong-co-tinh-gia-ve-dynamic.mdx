@@ -1,6 +1,6 @@
 ---
 title: "02. Động Cơ Tính Giá Vé Linh Hoạt (Dynamic Fare Engine)"
-description: "Cấu hình giá vé linh hoạt theo Tuyến, Chuyến, Hạng ghế, Nhóm hành khách và Thời gian (DEC-017)"
+description: "Cấu hình giá vé linh hoạt theo Tuyến, Chuyến, Hạng ghế, Nhóm hành khách và Khoảng thời gian (DEC-017)"
 ---
 
 # Động Cơ Tính Giá Vé Linh Hoạt (Dynamic Fare Engine)
@@ -11,11 +11,11 @@ Giá vé tàu Superdong được quyết định bởi nhiều trục nghiệp v
 
 ## 🎯 Bài Toán Nghiệp Vụ (DEC-017)
 
-Giá vé không cố định 300,000đ cho tất cả mọi người. Giá vé cần được **cấu hình linh hoạt tùy chỉnh nhiều nhất có thể** theo các yếu tố:
-1. Hành trình / Tuyến đường (Rạch Giá - Phú Quốc vs Hà Tiên - Phú Quốc).
-2. Nhóm hành khách (Người lớn, Trẻ em, Người cao tuổi, Khuyết tật).
-3. Hạng ghế / Khu vực (Ghế Phổ thông vs Ghế VIP).
-4. Khung giờ / Ngày lễ Tết (Peak vs Off-peak).
+Giá vé không cố định cho tất cả mọi người. Giá vé cần được **cấu hình linh hoạt tùy chỉnh nhiều nhất có thể** theo các yếu tố:
+1. Hành trình / Tuyến đường (`journey_id` / `route_id`).
+2. Nhóm hành khách (`passenger_type_id`).
+3. Hạng ghế / Khu vực (`seat_zone` / `seat_class`).
+4. Khoảng thời gian hiệu lực (`effective_from` đến `effective_to`).
 
 ---
 
@@ -23,7 +23,7 @@ Giá vé không cố định 300,000đ cho tất cả mọi người. Giá vé c
 
 ![Grug Dynamic Pricing](/images/grug_dynamic_pricing.jpeg)
 
-Hệ thống xây dựng **Fare Engine** dựa trên bảng quy tắc `fare_rules`. Khi khách đặt vé, Quote Service sẽ thực hiện ghép nối các điều kiện (Pattern Matching) để tìm ra dòng giá phù hợp nhất.
+Hệ thống xây dựng **Fare Engine** dựa trên bảng quy tắc `fare_rules` (thuộc Container `BookingSection/Pricing`). Khi khách đặt vé, Quote Service sẽ thực hiện ghép nối các điều kiện (Pattern Matching) để tìm ra quy tắc giá có độ ưu tiên (`priority`) phù hợp nhất.
 
 <Callout type="warn">
   **🧮 Công Thức Tính Giá Vé Dynamic (Dynamic Fare Formula)**:
@@ -45,20 +45,21 @@ erDiagram
         bigint route_id FK
         bigint passenger_type_id FK
         string seat_zone "STANDARD / VIP"
-        decimal base_price "330000"
-        timestamp valid_from
-        timestamp valid_to
-        boolean is_active "true"
+        bigint amount_vnd "VND nguyên - DEC-038"
+        int priority "Độ ưu tiên rule"
+        timestamp effective_from "Thời điểm bắt đầu hiệu lực"
+        timestamp effective_to "Thời điểm kết thúc hiệu lực"
+        string status "ACTIVE / INACTIVE"
     }
 ```
 
 ### 🔍 Lý Giải TẠI SAO (Schema Rationale):
-- **Vì sao có `valid_from` và `valid_to`?**: Để Superdong cài đặt trước lịch tăng giá vé dịp Tết từ ngày 28/12 đến 06/01 mà không làm thay đổi giá vé của các ngày thường trước đó.
+- **Vì sao có `effective_from` và `effective_to`?**: Xác định khoảng thời gian có hiệu lực của `fare_rules`. Mức giá cụ thể, khoảng thời gian áp dụng và tiêu chí xác định hiệu lực (so sánh với `booking.created_at` hay `trip.departure_at`) do Superdong cấu hình. Tài liệu hiện chưa chốt mức giá hay con số tăng cụ thể.
 
 ---
 
 ## 🗿 Grug Đúc Kết
 
 <Callout type="tip">
-  **🗿 Grug Kiến Trúc Mách Bảo**: *"Ghế VIP ngồi êm hơn tốn thêm 50 sò! Tù trưởng tính giá tự động ghép bảng quy tắc, không nhẩm tay!"*
+  **🗿 Grug Kiến Trúc Mách Bảo**: *"Ghế VIP ngồi êm hơn tốn thêm sò! Tù trưởng tính giá tự động ghép bảng quy tắc `fare_rules`, không nhẩm tay!"*
 </Callout>

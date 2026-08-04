@@ -8,6 +8,7 @@
     "chuong-03-dat-ve-khoa-ghe-va-booker",
     "chuong-04-thanh-toan-ve-dien-tu-va-qr-checkin",
     "chuong-05-su-co-doi-tau-huy-chuyen-va-doi-hoan-ve",
-    "chuong-06-van-hanh-ca-ban-ve-audit-va-cronjob"
+    "chuong-06-van-hanh-ca-ban-ve-audit-va-cronjob",
+    "chuong-07-phu-luc-cammang-erd-va-schema-rationale"
   ]
 }
